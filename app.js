@@ -233,8 +233,8 @@ async function openEditor(row,preset={}) {
     if(field.kind==='ref')control=`<select id="${id}" name="${name}" ${required}><option value="">Selecciona…</option>${optionsFor(field,row).map(item=>`<option value="${item.id}" ${Number(value)===Number(item.id)?'selected':''}>#${item.id} · ${esc(item.label)}${item.stock_actual===undefined?'':` · stock ${esc(item.stock_actual)}`}</option>`).join('')}</select>`;
     else if(field.kind==='select') {
       let choices=field.options;
-      if(table==='incidencia'&&['OPERADOR','TECNICO'].includes(user.rol))choices=['REPORTADA'];
-      if(table==='orden_trabajo') {const next={PENDIENTE:['ASIGNADA','CANCELADA'],ASIGNADA:['PENDIENTE','EN_PROCESO','CANCELADA'],EN_PROCESO:['FINALIZADA','CANCELADA'],FINALIZADA:[],CANCELADA:[]};choices=row?[row.estado,...(next[row.estado]||[])]:['PENDIENTE','ASIGNADA'];}
+      if(table==='incidencia'&&field.name==='estado'&&['OPERADOR','TECNICO'].includes(user.rol))choices=['REPORTADA'];
+      if(table==='orden_trabajo'&&field.name==='estado') {const next={PENDIENTE:['ASIGNADA','CANCELADA'],ASIGNADA:['PENDIENTE','EN_PROCESO','CANCELADA'],EN_PROCESO:['FINALIZADA','CANCELADA'],FINALIZADA:[],CANCELADA:[]};choices=row?[row.estado,...(next[row.estado]||[])]:['PENDIENTE','ASIGNADA'];}
       control=`<select id="${id}" name="${name}" ${required}>${choices.map(option=>`<option ${value===option?'selected':''}>${esc(option)}</option>`).join('')}</select>`;
     } else if(field.kind==='text'&&field.length>=500)control=`<textarea id="${id}" name="${name}" maxlength="${field.length}" rows="3" ${required}>${esc(value)}</textarea>`;
     else {const type={integer:'number',money:'number',datetime:'datetime-local',date:'date',email:'email'}[field.kind]||'text';control=`<input id="${id}" name="${name}" type="${type}" value="${esc(value)}" ${required} ${field.length?`maxlength="${field.length}"`:''} ${field.minimum===undefined?'':`min="${field.minimum}" max="${field.maximum}"`} ${['money','integer','datetime'].includes(field.kind)?`step="${field.kind==='money'?'.01':'1'}"`:''}>`;}

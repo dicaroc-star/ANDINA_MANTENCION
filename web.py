@@ -233,24 +233,26 @@ def build_application():
                 cursor.execute("ALTER SESSION SET TIME_ZONE='America/Santiago'")
                 cursor.execute(f'ALTER SESSION SET CURRENT_SCHEMA={settings.schema}')
         print('INICIO 3/4: conectando a Oracle con la cuenta técnica.',flush=True)
-        pool=oracledb.create_pool(user=user,password=os.environ['DB_PASSWORD'],dsn=os.environ['DB_SERVICE'].strip(),
-             config_dir=temp.name,wallet_location=temp.name,wallet_password=os.environ['WALLET_PASSWORD'],
-             min=1,max=4,increment=1,session_callback=configure,
-             getmode=oracledb.POOL_GETMODE_TIMEDWAIT,wait_timeout=10000)
-        try:
+        params=oracledb.ConnectParams(user=user,password=os.environ['DB_PASSWORD'],
+             config_dir=temp.name,wallet_location=temp.name,wallet_password=os.environ['WALLET_PASSWORD'])
+        params.parse_connect_string(os.environ['DB_SERVICE'].strip())
+        # El Wallet trae 20 reintentos. En el diagnóstico inicial necesitamos el error original,
+        # no el vencimiento de una espera del pool que se crea en segundo plano.
+        params.set(retry_count=0,retry_delay=0,tcp_connect_timeout=20)
+        with oracledb.connect(params=params) as connection:
+            connection.call_timeout=20000
+            configure(connection,None)
+            print('CONEXION DIRECTA CORRECTA.',flush=True)
             print('INICIO 4/4: comprobando tablas y administrador activo.',flush=True)
-            with pool.acquire() as connection:
-                connection.call_timeout=20000
-                for table in TABLES:
-                    query(connection,f"SELECT {','.join(columns(table))} FROM {table} WHERE 1=0")
-                ready=query(connection,"""SELECT u.id_usuario FROM usuario u JOIN rol r ON r.id_rol=u.id_rol
-                 WHERE u.estado='ACTIVO' AND r.nombre='ADMINISTRADOR' AND u.clave_hash LIKE 'pbkdf2_sha256$%'
-                 FETCH FIRST 1 ROWS ONLY""")
-                if not ready:
-                    raise ConfigError('No hay un administrador activo con contraseña configurada en DB_SCHEMA. Revisa el esquema o activa el administrador desde la versión local.')
-        except Exception:
-            pool.close()
-            raise
+            for table in TABLES:
+                query(connection,f"SELECT {','.join(columns(table))} FROM {table} WHERE 1=0")
+            ready=query(connection,"""SELECT u.id_usuario FROM usuario u JOIN rol r ON r.id_rol=u.id_rol
+             WHERE u.estado='ACTIVO' AND r.nombre='ADMINISTRADOR' AND u.clave_hash LIKE 'pbkdf2_sha256$%'
+             FETCH FIRST 1 ROWS ONLY""")
+            if not ready:
+                raise ConfigError('No hay un administrador activo con contraseña configurada en DB_SCHEMA. Revisa el esquema o activa el administrador desde la versión local.')
+        pool=oracledb.create_pool(params=params,min=1,max=4,increment=1,session_callback=configure,
+             getmode=oracledb.POOL_GETMODE_TIMEDWAIT,wait_timeout=30000)
     except Exception:
         temp.cleanup()
         raise

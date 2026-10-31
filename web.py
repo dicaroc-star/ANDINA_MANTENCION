@@ -251,8 +251,14 @@ def build_application():
              FETCH FIRST 1 ROWS ONLY""")
             if not ready:
                 raise ConfigError('No hay un administrador activo con contraseña configurada en DB_SCHEMA. Revisa el esquema o activa el administrador desde la versión local.')
-        pool=oracledb.create_pool(params=params,min=1,max=4,increment=1,session_callback=configure,
+        # create_pool requiere PoolParams; ConnectParams sirve solo para connect.
+        pool_params=oracledb.PoolParams(user=user,password=os.environ['DB_PASSWORD'],
+             config_dir=temp.name,wallet_location=temp.name,wallet_password=os.environ['WALLET_PASSWORD'],
+             min=1,max=4,increment=1,session_callback=configure,
              getmode=oracledb.POOL_GETMODE_TIMEDWAIT,wait_timeout=30000)
+        pool_params.parse_connect_string(os.environ['DB_SERVICE'].strip())
+        pool_params.set(retry_count=0,retry_delay=0,tcp_connect_timeout=20)
+        pool=oracledb.create_pool(params=pool_params)
     except Exception:
         temp.cleanup()
         raise

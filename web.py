@@ -27,6 +27,20 @@ from service import AppError, query, serial
 from schema import TABLES, columns
 
 
+class ConfigError(ValueError):
+    """Solo mensajes escritos por la aplicación, sin valores de secretos."""
+
+
+def startup_error(error):
+    if isinstance(error,ConfigError):
+        return 'CONFIGURACION: '+str(error)
+    detail=error.args[0] if error.args else None
+    code=getattr(detail,'full_code','')
+    if isinstance(code,str) and re.fullmatch(r'(ORA|DPY|DPI)-\d+',code):
+        return 'CONEXION ORACLE: '+code+'. Revisa credenciales, permisos y acceso de red.'
+    return f'No se pudo iniciar ({type(error).__name__}). Revisa la última etapa indicada; no se muestran detalles sensibles.'
+
+
 @dataclass(frozen=True)
 class Settings:
     origin: str
@@ -43,13 +57,17 @@ class Settings:
 
     @classmethod
     def from_env(cls):
-        origin=(os.environ.get('PUBLIC_URL') or os.environ.get('RENDER_EXTERNAL_URL','')).rstrip('/')
-        parsed=urlsplit(origin)
-        if parsed.scheme!='https' or not parsed.hostname or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
-            raise ValueError('Configura PUBLIC_URL con el origen HTTPS exacto, sin rutas ni credenciales.')
-        schema=os.environ.get('DB_SCHEMA','ADMIN').upper()
+        origin=(os.environ.get('PUBLIC_URL') or os.environ.get('RENDER_EXTERNAL_URL','')).strip().rstrip('/')
+        try:
+            parsed=urlsplit(origin)
+            valid_host=parsed.hostname
+        except ValueError:
+            raise ConfigError('PUBLIC_URL no tiene un formato válido. Usa la URL HTTPS de tu servicio, sin rutas.') from None
+        if parsed.scheme!='https' or not valid_host or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
+            raise ConfigError('Configura PUBLIC_URL con la URL HTTPS de tu servicio, sin rutas ni credenciales.')
+        schema=os.environ.get('DB_SCHEMA','ADMIN').strip().upper()
         if not re.fullmatch(r'[A-Z][A-Z0-9_]{0,29}',schema):
-            raise ValueError('DB_SCHEMA debe ser un nombre de esquema válido.')
+            raise ConfigError('DB_SCHEMA debe ser un nombre de esquema válido; para las tablas actuales usa ADMIN.')
         return cls(origin,schema)
 
 
@@ -180,33 +198,47 @@ def create_wsgi(application,settings):
 
 
 def build_application():
+    print('INICIO 1/4: comprobando variables de configuración.',flush=True)
     settings=Settings.from_env()
-    user=os.environ.get('DB_USER','')
+    user=os.environ.get('DB_USER','').strip()
     if not user or user.upper() in ('ADMIN','SYS','SYSTEM'):
-        raise ValueError('Configura DB_USER con una cuenta técnica de privilegios limitados, distinta de ADMIN.')
+        raise ConfigError('DB_USER falta o usa una cuenta administrativa. Configura ANDINA_APP.')
     required=['DB_PASSWORD','DB_SERVICE','WALLET_PASSWORD']
-    if any(not os.environ.get(name) for name in required):
-        raise ValueError('Falta una variable secreta de conexión. Revisa la guía de publicación.')
+    missing=[name for name in required if not os.environ.get(name)]
+    if missing:
+        raise ConfigError('Faltan estas variables: '+', '.join(missing)+'. Revisa sus nombres exactos en Environment.')
     temp=TemporaryDirectory(prefix='andina-web-wallet-')
-    os.chmod(temp.name,0o700)
     try:
+        if os.name=='posix':
+            os.chmod(temp.name,0o700)
+        print('INICIO 2/4: comprobando archivos secretos del Wallet.',flush=True)
         # En Render se montan secretos de texto en /etc/secrets; no entran a la imagen.
         for filename in ('tnsnames.ora','ewallet.pem'):
             path=Path(os.environ.get('WALLET_DIR','/etc/secrets'))/filename
             if not path.is_file() or path.stat().st_size>2_000_000:
-                raise ValueError('Faltan los archivos secretos válidos del Wallet.')
+                raise ConfigError('No se encuentra un archivo secreto válido llamado '+filename+'. Revisa Secret Files y WALLET_DIR=/etc/secrets.')
+            content=path.read_bytes()
+            if filename=='ewallet.pem' and not re.search(rb'-----BEGIN (?:ENCRYPTED PRIVATE KEY|PRIVATE KEY|RSA PRIVATE KEY)-----',content):
+                raise ConfigError('ewallet.pem no contiene una clave PEM. Copia el contenido completo del archivo ewallet.pem; no el de tnsnames.ora.')
+            if filename=='tnsnames.ora':
+                alias=os.environ['DB_SERVICE'].strip()
+                if not re.search(r'(?im)^\s*'+re.escape(alias)+r'\s*=',content.decode('utf-8-sig')):
+                    raise ConfigError('DB_SERVICE no coincide con un alias de tnsnames.ora. Comprueba basedatos2026_high y el contenido del archivo.')
             destination=Path(temp.name,filename)
-            destination.write_bytes(path.read_bytes())
-            os.chmod(destination,0o600)
+            destination.write_bytes(content)
+            if os.name=='posix':
+                os.chmod(destination,0o600)
         def configure(connection,tag):
             with connection.cursor() as cursor:
                 cursor.execute("ALTER SESSION SET TIME_ZONE='America/Santiago'")
                 cursor.execute(f'ALTER SESSION SET CURRENT_SCHEMA={settings.schema}')
-        pool=oracledb.create_pool(user=user,password=os.environ['DB_PASSWORD'],dsn=os.environ['DB_SERVICE'],
+        print('INICIO 3/4: conectando a Oracle con la cuenta técnica.',flush=True)
+        pool=oracledb.create_pool(user=user,password=os.environ['DB_PASSWORD'],dsn=os.environ['DB_SERVICE'].strip(),
              config_dir=temp.name,wallet_location=temp.name,wallet_password=os.environ['WALLET_PASSWORD'],
              min=1,max=4,increment=1,session_callback=configure,
              getmode=oracledb.POOL_GETMODE_TIMEDWAIT,wait_timeout=10000)
         try:
+            print('INICIO 4/4: comprobando tablas y administrador activo.',flush=True)
             with pool.acquire() as connection:
                 connection.call_timeout=20000
                 for table in TABLES:
@@ -215,7 +247,7 @@ def build_application():
                  WHERE u.estado='ACTIVO' AND r.nombre='ADMINISTRADOR' AND u.clave_hash LIKE 'pbkdf2_sha256$%'
                  FETCH FIRST 1 ROWS ONLY""")
                 if not ready:
-                    raise ValueError('Activa primero un administrador desde la versión local. El sitio público no permite activación inicial.')
+                    raise ConfigError('No hay un administrador activo con contraseña configurada en DB_SCHEMA. Revisa el esquema o activa el administrador desde la versión local.')
         except Exception:
             pool.close()
             raise
@@ -237,7 +269,7 @@ def main():
         app=build_application()
     except Exception as error:
         # No imprimir textos de excepciones que puedan contener configuración sensible.
-        print(f'No se pudo iniciar el servicio ({type(error).__name__}). Revisa secretos, cuenta técnica y Oracle.',flush=True)
+        print(startup_error(error),flush=True)
         raise SystemExit(1)
     port=int(os.environ.get('PORT','10000'))
     options=dict(host='0.0.0.0',port=port,threads=8,connection_limit=100,

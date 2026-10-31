@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: andina-mantencion
+    runtime: docker
+    plan: free
+    numInstances: 1
+    healthCheckPath: /health/live
+    envVars:
+      - key: DB_USER
+        value: ANDINA_APP
+      - key: DB_SCHEMA
+        value: ADMIN
+      - key: DB_SERVICE
+        value: basedatos2026_high
+      - key: DB_PASSWORD
+        sync: false
+      - key: WALLET_PASSWORD
+        sync: false
+      - key: TRUSTED_PROXY
+        value: '*'
+      - key: WALLET_DIR
+        value: /etc/secrets

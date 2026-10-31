@@ -4,6 +4,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp
 let user = null, csrf = '', metadata = {}, lookups = {}, current = 'dashboard', rows = [], page = 1, total = 0;
 let editing = null, generation = 0, listGeneration = 0, searchTimer;
 let pendingReport = new URLSearchParams(location.search || '').get('reportar');
+let reportRequested = new URLSearchParams(location.search || '').get('accion')==='reportar';
 let qrReportActive = false;
 const names = {id_usuario:'Reportado / registrado por',fecha_reporte:'Fecha de reporte',fecha_creacion:'Fecha de creación',fecha_consumo:'Fecha de consumo',id_orden:'Orden',estado_anterior:'Estado anterior',estado_nuevo:'Estado nuevo',fecha_cambio:'Fecha del cambio',observaciones:'Observaciones'};
 const relationNames = {id_usuario:'usuario',id_orden:'orden_trabajo'};
@@ -34,6 +35,7 @@ function leave() {
   $('#app').hidden=true; $('#login').hidden=false; $('#content').replaceChildren(); $('#navigation').replaceChildren();
   $('#password').value=''; $('#password').type='password'; $('#toggle-password').textContent='Mostrar'; $('#toggle-password').setAttribute('aria-pressed','false');
   $('#email').focus();
+  updateLoginIntent();
 }
 async function enter(result) {
   user=result.user; csrf=result.csrf;
@@ -46,11 +48,34 @@ async function enter(result) {
   $('#login').hidden=true; $('#app').hidden=false; $('#message').hidden=true;
   $('#connection-status').textContent='● Oracle conectado';
   await render('dashboard');
-  await continueQrReport();
+  if(pendingReport)await continueQrReport();
+  else if(reportRequested)await reportFailure();
 }
+
+function updateLoginIntent() {
+  const reporting=Boolean(pendingReport||reportRequested);
+  $('#login-title').textContent=reporting?'Inicia sesión para reportar':'Bienvenido';
+  $('#report-login-note').hidden=!reporting;
+  $('#login-submit').textContent=reporting?'ENTRAR Y REPORTAR →':'Iniciar sesión →';
+}
+function clearReportRequest() {
+  reportRequested=false;
+  const params=new URLSearchParams(location.search||'');params.delete('accion');
+  history.replaceState(null,'',location.pathname+(params.size?'?'+params.toString():'')+(location.hash||''));
+  updateLoginIntent();
+}
+$('#public-report-failure').addEventListener('click',async()=>{
+  reportRequested=true;
+  const params=new URLSearchParams(location.search||'');params.set('accion','reportar');
+  history.replaceState(null,'',location.pathname+'?'+params.toString()+(location.hash||''));
+  updateLoginIntent();
+  if(user)await reportFailure();
+  else {$('#email').focus();$('#email').scrollIntoView?.({behavior:'smooth',block:'center'});}
+});
 
 function finishQrReport() {
   pendingReport=null;qrReportActive=false;
+  clearReportRequest();
   const params=new URLSearchParams(location.search || '');params.delete('reportar');
   const query=params.toString();
   history.replaceState(null,'',location.pathname+(query?'?'+query:'')+(location.hash||''));
@@ -73,6 +98,7 @@ async function continueQrReport() {
   if(!user || current!=='incidencia')return;
   const opened=await openEditor(null,{id_activo:asset.id,estado:'REPORTADA'});
   if(opened) {
+    clearReportRequest();
     qrReportActive=true;
     $('#field-id_activo').value=String(asset.id);
     $('#editor-note').textContent=`Activo del QR: ${asset.codigo_activo} · ${asset.label}. Describe la falla y revisa la prioridad antes de guardar.`;
@@ -81,7 +107,7 @@ async function continueQrReport() {
 }
 async function reportFailure(event) {
   if(!user)return;
-  if(!metadata.incidencia?.writable){notify('Tu cuenta no tiene permiso para reportar incidencias.',true);return;}
+  if(!metadata.incidencia?.writable){clearReportRequest();notify('Tu cuenta no tiene permiso para reportar incidencias.',true);return;}
   const trigger=event?.currentTarget;
   if(trigger)trigger.disabled=true;
   try {
@@ -90,6 +116,7 @@ async function reportFailure(event) {
     if(!user || current!=='incidencia' || !$('#new-record'))return;
     const opened=await openEditor(null,{estado:'REPORTADA'});
     if(opened){
+      clearReportRequest();
       $('#editor-title').textContent='Reportar falla';
       $('#editor-note').textContent='Selecciona el activo, describe lo que ocurre y revisa la prioridad. El reporte se enviará al pulsar Guardar en Oracle.';
       $('#field-id_activo').focus();
@@ -243,6 +270,7 @@ $('#password-form').addEventListener('submit',async event=>{
  finally{$('#save-password').disabled=false;}
 });
 async function start(){
+ updateLoginIntent();
  if(pendingReport)$('#server-hint').textContent='Inicia sesión con tu cuenta para reportar la falla del activo indicado por el QR.';
  if(location.protocol==='file:'){$('#login-error').textContent='Esta versión se abre desde la dirección web publicada; no desde un archivo local.';$('#login-submit').disabled=true;return;}
  try{await enter(await api('/api/me'));}catch(error){leave();if(!error.message.includes('Inicia sesión'))$('#login-error').textContent=error.message;}

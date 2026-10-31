@@ -42,7 +42,7 @@ async function enter(result) {
   [metadata,lookups]=await Promise.all([api('/api/meta'),api('/api/lookups')]);
   $('#profile-name').textContent=`${user.nombre} ${user.apellido}`;
   $('#profile-role').textContent=user.rol; $('#avatar').textContent=(user.nombre[0]||'')+(user.apellido[0]||'');
-  $('#navigation').innerHTML=(metadata.incidencia?.writable?'<button id="nav-report-failure" class="report-nav"><span aria-hidden="true">＋</span> REPORTAR FALLA</button>':'')+'<button class="nav-item" data-view="dashboard">▦ <span>Panel principal</span></button>'+menuOrder.filter(table=>metadata[table]).map(table=>`<button class="nav-item" data-view="${table}">◇ <span>${esc(metadata[table].title)}</span></button>`).join('');
+  $('#navigation').innerHTML=(metadata.incidencia?.writable?'<button id="nav-report-failure" class="report-nav"><span aria-hidden="true">＋</span> Reportar una falla</button>':'')+'<button class="nav-item" data-view="dashboard">▦ <span>Panel principal</span></button>'+menuOrder.filter(table=>metadata[table]).map(table=>`<button class="nav-item" data-view="${table}">◇ <span>${esc(metadata[table].title)}</span></button>`).join('');
   $('#nav-report-failure')?.addEventListener('click',reportFailure);
   $('#navigation').querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>render(button.dataset.view)));
   $('#login').hidden=true; $('#app').hidden=false; $('#message').hidden=true;
@@ -126,7 +126,7 @@ async function reportFailure(event) {
 }
 function reportShortcut() {
   if(!metadata.incidencia?.writable)return '';
-  return '<section class="report-hero" aria-labelledby="report-heading"><div class="report-symbol" aria-hidden="true">!</div><div class="report-copy"><span class="report-eyebrow">REPORTE DE FALLAS</span><h2 id="report-heading">¿Detectaste una falla?</h2><p>Selecciona el activo y cuéntanos qué ocurre.</p></div><button id="dashboard-report-failure" class="report-action">REPORTAR FALLA <span aria-hidden="true">→</span></button></section>';
+  return '<section class="report-hero" aria-labelledby="report-heading"><div class="report-symbol" aria-hidden="true">!</div><div class="report-copy"><span class="report-eyebrow">REPORTE DE FALLAS</span><h2 id="report-heading">¿Notaste una falla en un equipo?</h2><p>Repórtala aquí para que el equipo de mantenimiento pueda revisarla.</p></div><button id="dashboard-report-failure" class="report-action">Reportar una falla <span aria-hidden="true">→</span></button></section>';
 }
 $('#login-form').addEventListener('submit',async event=>{
   event.preventDefault(); $('#login-submit').disabled=true; $('#login-error').textContent='';

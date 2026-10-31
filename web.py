@@ -22,7 +22,7 @@ from threading import Lock
 import hashlib
 
 import oracledb
-from server import Application, Handler
+from server import Application, Handler, PUBLIC
 from service import AppError, query, serial
 from schema import TABLES, columns
 
@@ -118,7 +118,9 @@ class WebHandler(Handler):
             raise AppError('Dirección del sitio no permitida.',403)
         if self.settings.production and self.environ.get('wsgi.url_scheme')!='https':
             raise AppError('Usa la dirección HTTPS de la aplicación.',403)
-        if self.headers.get('Sec-Fetch-Site')=='cross-site':
+        # Abrir el login desde un enlace externo es válido. La lista PUBLIC contiene
+        # solo HTML/CSS/JS públicos; las APIs y todas las escrituras siguen protegidas.
+        if self.headers.get('Sec-Fetch-Site')=='cross-site' and (mutation or urlsplit(self.path).path not in PUBLIC):
             raise AppError('Solicitud de otro sitio rechazada.',403)
         if mutation:
             if self.headers.get('Origin')!=self.settings.origin:

@@ -175,7 +175,7 @@ class Service:
         statements={
          'rol':"SELECT id_rol AS id,nombre AS label FROM rol ORDER BY nombre",
          'ubicacion':"SELECT id_ubicacion AS id,nombre AS label FROM ubicacion ORDER BY nombre",
-         'activo':"SELECT id_activo AS id,codigo_activo||' · '||nombre AS label,estado FROM activo ORDER BY codigo_activo",
+         'activo':"SELECT id_activo AS id,codigo_activo,codigo_activo||' · '||nombre AS label,estado FROM activo ORDER BY codigo_activo",
          'usuario':"SELECT id_usuario AS id,nombre||' '||apellido AS label,estado FROM usuario ORDER BY nombre,apellido",
          'incidencia':"SELECT id_incidencia AS id,'#'||id_incidencia||' · '||SUBSTR(descripcion,1,90) AS label,estado FROM incidencia ORDER BY id_incidencia DESC",
          'orden_trabajo':"SELECT id_orden AS id,'Orden #'||id_orden||' · '||estado AS label,estado,id_usuario_asignado FROM orden_trabajo ORDER BY id_orden DESC",
@@ -224,7 +224,7 @@ class Service:
         clean=validate(table,data,creating=old is None)
         check_dates(table,clean,old)
         if table=='incidencia':
-            if role=='OPERADOR':
+            if role in ('OPERADOR','TECNICO'):
                 if old and (old['id_usuario']!=user['id_usuario'] or old['estado']!='REPORTADA'):
                     raise AppError('Solo puedes editar tus incidencias mientras estén REPORTADAS.',403)
                 if clean['estado']!='REPORTADA':

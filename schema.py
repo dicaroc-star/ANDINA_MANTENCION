@@ -60,7 +60,7 @@ MANAGERS = {'ADMINISTRADOR','SUPERVISOR'}
 WRITERS = {
  'rol': {'ADMINISTRADOR'}, 'usuario': {'ADMINISTRADOR'},
  'ubicacion': MANAGERS, 'activo': MANAGERS, 'repuesto': MANAGERS,
- 'incidencia': MANAGERS | {'OPERADOR'},
+ 'incidencia': MANAGERS | {'OPERADOR','TECNICO'},
  'orden_trabajo': MANAGERS,
  'intervencion': MANAGERS | {'TECNICO'},
  'consumo_repuesto': MANAGERS | {'TECNICO'},

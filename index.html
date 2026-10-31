@@ -24,4 +24,15 @@
 <dialog id="editor" aria-labelledby="editor-title"><form id="record-form"><div class="dialog-header"><div><span class="eyebrow">ANDINAMANTENCIÓN</span><h2 id="editor-title"></h2></div><button class="secondary" id="close-editor" type="button" aria-label="Cerrar formulario">✕</button></div><p id="editor-note" class="muted small"></p><div id="fields" class="form-grid"></div><p id="form-error" class="error" role="alert"></p><div class="form-actions"><button type="button" class="secondary" id="cancel-editor">Cancelar</button><button class="primary" id="save-record" type="submit">Guardar en Oracle</button></div></form></dialog>
 <dialog id="detail" aria-labelledby="detail-title"><div class="dialog-header"><h2 id="detail-title">Detalle</h2><button id="close-detail" class="secondary" aria-label="Cerrar detalle">✕</button></div><dl id="detail-content"></dl></dialog>
 <dialog id="password-dialog" aria-labelledby="password-title"><form id="password-form"><h2 id="password-title">Cambiar contraseña</h2><p class="muted small">Al guardar se cerrarán tus sesiones. Usa entre 12 y 128 caracteres.</p><label for="current-password">Contraseña actual</label><input id="current-password" type="password" autocomplete="current-password" maxlength="128" required><label for="new-password">Nueva contraseña</label><input id="new-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required><label for="confirm-password">Repite la nueva contraseña</label><input id="confirm-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required><p id="password-error" class="error" role="alert"></p><div class="form-actions"><button type="button" class="secondary" id="cancel-password">Cancelar</button><button type="submit" class="primary" id="save-password">Cambiar contraseña</button></div></form></dialog>
+<dialog id="report-ticket" class="receipt-dialog" aria-labelledby="receipt-title" aria-describedby="receipt-message">
+ <button id="close-ticket" class="receipt-close secondary" type="button" aria-label="Cerrar comprobante">✕</button>
+ <div class="receipt-check" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="m8 16 5 5 11-11" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+ <span class="receipt-eyebrow">ANDINA MANTENCIÓN · COMPROBANTE</span>
+ <h2 id="receipt-title">¡Listo! Tu reporte quedó registrado</h2>
+ <p id="receipt-message"></p>
+ <div class="receipt-number"><span>CÓDIGO DE REGISTRO</span><strong id="receipt-code"></strong><small id="receipt-id"></small></div>
+ <dl id="receipt-details" class="receipt-details"></dl>
+ <p class="receipt-help">Guarda este código para identificar tu reporte.</p>
+ <div class="receipt-actions"><button id="download-ticket" class="secondary" type="button">Descargar comprobante</button><button id="done-ticket" class="primary" type="button">Listo, gracias</button></div>
+</dialog>
 </body></html>

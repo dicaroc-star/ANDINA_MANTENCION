@@ -6,6 +6,7 @@ let editing = null, generation = 0, listGeneration = 0, searchTimer;
 let pendingReport = new URLSearchParams(location.search || '').get('reportar');
 let reportRequested = new URLSearchParams(location.search || '').get('accion')==='reportar';
 let qrReportActive = false;
+let reportReceipt = null;
 const names = {id_usuario:'Reportado / registrado por',fecha_reporte:'Fecha de reporte',fecha_creacion:'Fecha de creación',fecha_consumo:'Fecha de consumo',id_orden:'Orden',estado_anterior:'Estado anterior',estado_nuevo:'Estado nuevo',fecha_cambio:'Fecha del cambio',observaciones:'Observaciones'};
 const relationNames = {id_usuario:'usuario',id_orden:'orden_trabajo'};
 const menuOrder = ['activo','ubicacion','incidencia','orden_trabajo','intervencion','repuesto','consumo_repuesto','mantenimiento_preventivo','historial_estado','usuario','rol'];
@@ -29,6 +30,7 @@ function notify(message, error = false) {
   $('#message').hidden=false; $('#message').textContent=message; $('#message').classList.toggle('failure',error);
 }
 function leave() {
+  reportReceipt=null;
   qrReportActive=false;
   user=null; csrf=''; metadata={}; lookups={}; rows=[]; generation++; listGeneration++;
   document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());
@@ -250,12 +252,51 @@ $('#record-form').addEventListener('submit',async event=>{
   try {
     const result=await api('/api/records/'+table,{id:editing?.[metadata[table].pk]??null,data});
     if(qrReportActive && table==='incidencia' && !editing)finishQrReport();
-    $('#editor').close(); notify(`Registro #${result.id} guardado correctamente en Oracle.`);
+    $('#editor').close();
+    if(table==='incidencia' && !editing){
+      showReportReceipt(result.id,data);
+      notify(`¡Listo! Tu reporte ${reportReceipt.code} quedó registrado.`);
+    }else notify(`¡Listo! Los cambios del registro #${result.id} se guardaron correctamente.`);
     if(table==='usuario'&&editing?.id_usuario===user.id_usuario){leave();$('#login-error').textContent='Tu cuenta cambió. Inicia sesión nuevamente.';return;}
     lookups=await api('/api/lookups'); await loadRows();
   }catch(error){$('#form-error').textContent=error.message;if(!$('#editor').open&&user)notify(error.message,true);}
   finally{$('#save-record').disabled=false;$('#cancel-editor').disabled=false;$('#close-editor').disabled=false;}
 });
+
+function showReportReceipt(id,data) {
+  const asset=lookups.activo.find(item=>Number(item.id)===Number(data.id_activo));
+  reportReceipt={id,code:'INC-'+String(id).padStart(6,'0'),
+    equipo:asset?.label || 'Equipo #'+data.id_activo,
+    descripcion:data.descripcion,prioridad:data.prioridad,estado:data.estado||'REPORTADA'};
+  $('#receipt-code').textContent=reportReceipt.code;
+  $('#receipt-id').textContent='Registro N.º '+id+' · Oracle';
+  $('#receipt-message').textContent=reportReceipt.estado==='REPORTADA'
+    ? 'Gracias por avisarnos. Tu reporte quedó registrado y está listo para revisión.'
+    : 'Gracias por avisarnos. Tu reporte quedó registrado correctamente.';
+  $('#receipt-details').innerHTML=[['Equipo',reportReceipt.equipo],['Prioridad',reportReceipt.prioridad],['Estado del reporte',reportReceipt.estado],['Descripción',reportReceipt.descripcion]].map(([label,value])=>`<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('');
+  $('#report-ticket').showModal();
+}
+function receiptText() {
+  if(!reportReceipt)return '';
+  const receipt=reportReceipt;
+  return ['ANDINA MANTENCIÓN','COMPROBANTE DE REPORTE','',
+    'Código de registro: '+receipt.code,'Incidencia Oracle: '+receipt.id,
+    'Equipo: '+receipt.equipo,'Prioridad: '+receipt.prioridad,
+    'Estado del reporte: '+receipt.estado,'','Descripción:',receipt.descripcion,'',
+    'Guarda este código para identificar tu reporte.',
+    'https://andina-mantencion.onrender.com/'].join('\n');
+}
+$('#download-ticket').addEventListener('click',()=>{
+  if(!reportReceipt)return;
+  const blob=new Blob(['\ufeff'+receiptText()],{type:'text/plain;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');link.href=url;link.download=reportReceipt.code+'.txt';
+  document.body.appendChild(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+function closeReportTicket() {$('#report-ticket').close();reportReceipt=null;}
+['#close-ticket','#done-ticket'].forEach(selector=>$(selector).addEventListener('click',closeReportTicket));
+$('#report-ticket').addEventListener('cancel',()=>{reportReceipt=null;});
 $('#editor').addEventListener('cancel',event=>{if($('#save-record').disabled)event.preventDefault();else if(qrReportActive)finishQrReport();});
 ['#close-editor','#cancel-editor'].forEach(selector=>$(selector).addEventListener('click',()=>{if(qrReportActive)finishQrReport();$('#editor').close();}));
 $('#close-detail').addEventListener('click',()=>$('#detail').close());

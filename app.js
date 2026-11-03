@@ -196,7 +196,7 @@ async function loadRows() {
   }catch(error){if(request===listGeneration && user){container.innerHTML='<p class="empty">No se pudieron cargar los registros.</p>';notify(error.message,true);}}
 }
 function canEdit(table,row) {
-  if(!metadata[table].writable)return false;
+  if(!metadata[table].editable)return false;
   if(['OPERADOR','TECNICO'].includes(user.rol) && table==='incidencia')return row.id_usuario===user.id_usuario && row.estado==='REPORTADA';
   if(user.rol==='TECNICO') {
     if(table==='intervencion')return row.id_usuario===user.id_usuario && lookups.orden_trabajo.some(order=>order.id===row.id_orden&&order.id_usuario_asignado===user.id_usuario&&order.estado==='EN_PROCESO');
@@ -233,7 +233,7 @@ async function openEditor(row,preset={}) {
     if(field.kind==='ref')control=`<select id="${id}" name="${name}" ${required}><option value="">Selecciona…</option>${optionsFor(field,row).map(item=>`<option value="${item.id}" ${Number(value)===Number(item.id)?'selected':''}>#${item.id} · ${esc(item.label)}${item.stock_actual===undefined?'':` · stock ${esc(item.stock_actual)}`}</option>`).join('')}</select>`;
     else if(field.kind==='select') {
       let choices=field.options;
-      if(table==='incidencia'&&field.name==='estado'&&['OPERADOR','TECNICO'].includes(user.rol))choices=['REPORTADA'];
+      if(table==='incidencia'&&field.name==='estado'&&!metadata.incidencia.editable)choices=['REPORTADA'];
       if(table==='orden_trabajo'&&field.name==='estado') {const next={PENDIENTE:['ASIGNADA','CANCELADA'],ASIGNADA:['PENDIENTE','EN_PROCESO','CANCELADA'],EN_PROCESO:['FINALIZADA','CANCELADA'],FINALIZADA:[],CANCELADA:[]};choices=row?[row.estado,...(next[row.estado]||[])]:['PENDIENTE','ASIGNADA'];}
       control=`<select id="${id}" name="${name}" ${required}>${choices.map(option=>`<option ${value===option?'selected':''}>${esc(option)}</option>`).join('')}</select>`;
     } else if(field.kind==='text'&&field.length>=500)control=`<textarea id="${id}" name="${name}" maxlength="${field.length}" rows="3" ${required}>${esc(value)}</textarea>`;

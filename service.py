@@ -9,6 +9,20 @@ import oracledb
 from schema import TABLES, ORDER_STATES, ROLE_NAMES, columns, can_read, can_write
 from security import hash_password
 
+OWNER_EMAIL = 'dcaro@andinamantencion.cl'
+
+def is_owner(user):
+    return (user.get('correo', '').strip().lower() == OWNER_EMAIL
+            and user.get('rol') == 'ADMINISTRADOR'
+            and user.get('estado') == 'ACTIVO')
+
+def can_manage_record(table, identifier, user):
+    if is_owner(user):
+        return table in TABLES and can_write(table, user['rol'])
+    return (table == 'incidencia' and identifier is None
+            and user.get('estado') == 'ACTIVO'
+            and can_write(table, user.get('rol')))
+
 class AppError(Exception):
     def __init__(self,message,status=400):
         super().__init__(message)
@@ -145,8 +159,11 @@ class Service:
                           r.nombre AS rol FROM usuario u JOIN rol r ON r.id_rol=u.id_rol
                           WHERE u.id_usuario=:id''',dict(id=identifier))
 
-    def metadata(self,role):
-        return {name:{**spec, 'columns':columns(name),'writable':can_write(name,role)}
+    def metadata(self,role,user=None):
+        user = user or {}
+        return {name:{**spec, 'columns':columns(name),
+                      'writable':can_manage_record(name,None,user),
+                      'editable':is_owner(user) and can_write(name,role)}
                 for name,spec in TABLES.items() if can_read(name,role)}
 
     def list_rows(self,connection,table,role,page=1,search='',state=''):
@@ -204,7 +221,7 @@ class Service:
         if not isinstance(data,dict):
             raise AppError('Se esperaba un formulario JSON.')
         role=user['rol']
-        if table not in TABLES or not can_write(table,role):
+        if not can_manage_record(table,identifier,user):
             raise AppError('No tienes permiso para guardar en este módulo.',403)
         spec=TABLES[table]
         pk=spec['pk']
@@ -224,7 +241,7 @@ class Service:
         clean=validate(table,data,creating=old is None)
         check_dates(table,clean,old)
         if table=='incidencia':
-            if role in ('OPERADOR','TECNICO'):
+            if not is_owner(user):
                 if old and (old['id_usuario']!=user['id_usuario'] or old['estado']!='REPORTADA'):
                     raise AppError('Solo puedes editar tus incidencias mientras estén REPORTADAS.',403)
                 if clean['estado']!='REPORTADA':
@@ -263,6 +280,10 @@ class Service:
                 raise AppError('Este rol tiene usuarios asociados. No se puede cambiar su nombre y alterar sus permisos.')
         if table=='usuario':
             target_role=self.require(connection,'rol',clean['id_rol'])['nombre']
+            if old and old['correo'].strip().lower() == OWNER_EMAIL:
+                if (clean['correo'].strip().lower() != OWNER_EMAIL
+                        or clean['estado'] != 'ACTIVO' or target_role != 'ADMINISTRADOR'):
+                    raise AppError('La cuenta propietaria debe conservar su correo, estado activo y rol administrador.')
             if target_role not in ROLE_NAMES:
                 raise AppError('El rol seleccionado no tiene permisos definidos.')
             if old and old['estado']=='ACTIVO':

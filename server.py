@@ -201,7 +201,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.app.sessions.revoke_user(user['id_usuario'])
                     self.respond(200,dict(ok=True),cookie='andina_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0')
                 elif path=='/api/meta' and not mutation:
-                    self.respond(200,self.app.service.metadata(user['rol']))
+                    self.respond(200,self.app.service.metadata(user['rol'],user))
                 elif path=='/api/lookups' and not mutation:
                     self.respond(200,self.app.service.lookups(connection))
                 elif path=='/api/dashboard' and not mutation:

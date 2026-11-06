@@ -22,7 +22,7 @@ Se incorporó el diseño de las capturas a acceso, panel, reporte de fallas, fic
 
 Las fotografías se guardan como BLOB privados en una tabla adicional; no en el disco temporal de Render. Los registros de las 11 tablas originales no se modifican por esta activación.
 
-Ejecutar una vez `ACTIVAR_FOTOS.sql` como propietario de las tablas, o abrir `ACTIVAR_FOTOS.cmd` en Windows y seguir el asistente. El asistente pide el ZIP del Wallet, el usuario propietario y las claves de forma local. No guarda las claves. Muestra el cambio y requiere escribir ACTIVAR antes de ejecutar DDL.
+Ejecutar una vez `ACTIVAR_FOTOS.sql` como propietario de las tablas, o abrir `ACTIVAR_FOTOS.cmd` en Windows y seguir el asistente. El asistente pide el ZIP del Wallet, el usuario propietario y las claves de forma local. No guarda las claves. Muestra el cambio antes de aplicarlo. El asistente visual usa el botón Activar fotografías; el asistente de texto opcional activar_fotos.py requiere escribir ACTIVAR.
 
 Se crea `incidencia_evidencia`, con referencias a incidencia y usuario, y se concede únicamente SELECT e INSERT sobre esa tabla a ANDINA_APP. Oracle confirma cada instrucción DDL por separado. No se conceden DELETE, privilegios ANY ni permisos de creación de tablas a la cuenta técnica.
 

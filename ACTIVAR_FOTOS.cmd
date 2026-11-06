@@ -1,3 +1,3 @@
 @echo off
 cd /d "%~dp0"
-python activar_fotos.py
+pythonw activar_fotos_gui.py

@@ -34,7 +34,7 @@ class WebTests(unittest.TestCase):
         return captured
 
     def login(self):
-        result=self.request('/api/login','POST',dict(correo='test@example.test',password='ContraseñaLocal123!'))
+        result=self.request('/api/login','POST',dict(correo='dcaro@andinamantencion.cl',password='ContraseñaLocal123!'))
         self.assertTrue(result['status'].startswith('200'))
         return result['headers']['Set-Cookie'].split(';')[0],result['body']['csrf']
 
@@ -54,7 +54,7 @@ class WebTests(unittest.TestCase):
     def test_registered_login_secure_cookie_csrf_write_logout(self):
         cookie,csrf=self.login()
         self.assertTrue(cookie.startswith('__Host-andina_session='))
-        result=self.request('/api/login','POST',dict(correo='test@example.test',password='ContraseñaLocal123!'))
+        result=self.request('/api/login','POST',dict(correo='dcaro@andinamantencion.cl',password='ContraseñaLocal123!'))
         self.assertIn('; Secure',result['headers']['Set-Cookie'])
         self.assertIn('HttpOnly',result['headers']['Set-Cookie'])
         self.assertIn('SameSite=Strict',result['headers']['Set-Cookie'])
@@ -73,7 +73,7 @@ class WebTests(unittest.TestCase):
         self.assertTrue(result['status'].startswith('401'))
         self.connection.db.execute("UPDATE usuario SET estado='INACTIVO' WHERE id_usuario=1")
         self.connection.commit()
-        result=self.request('/api/login','POST',dict(correo='test@example.test',password='ContraseñaLocal123!'))
+        result=self.request('/api/login','POST',dict(correo='dcaro@andinamantencion.cl',password='ContraseñaLocal123!'))
         self.assertTrue(result['status'].startswith('401'))
 
     def test_password_change_from_another_process_invalidates_session(self):
@@ -101,3 +101,4 @@ class WebTests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+

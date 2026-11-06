@@ -86,7 +86,7 @@ class Connection:
                 declarations.append('clave_hash TEXT NOT NULL')
             self.db.execute(f"CREATE TABLE {table} ({','.join(declarations)})")
         self.db.execute("INSERT INTO rol(nombre) VALUES ('ADMINISTRADOR')")
-        self.db.execute('INSERT INTO usuario(nombre,apellido,correo,estado,id_rol,clave_hash) VALUES (?,?,?,?,?,?)',('CUENTA','TEST','test@example.test','ACTIVO',1,hash_password('ContraseñaLocal123!')))
+        self.db.execute('INSERT INTO usuario(nombre,apellido,correo,estado,id_rol,clave_hash) VALUES (?,?,?,?,?,?)',('CUENTA','TEST','dcaro@andinamantencion.cl','ACTIVO',1,hash_password('ContraseñaLocal123!')))
         self.db.commit()
     def cursor(self):
         return Cursor(self)
@@ -109,7 +109,7 @@ class IntegrationTests(unittest.TestCase):
     def setUp(self):
         self.connection=Connection()
         self.service=Service(Pool(self.connection))
-        self.actor=dict(id_usuario=1,rol='ADMINISTRADOR')
+        self.actor=dict(id_usuario=1,rol='ADMINISTRADOR',correo='dcaro@andinamantencion.cl',estado='ACTIVO')
     def tearDown(self):
         self.connection.db.close()
     def save(self,table,data,identifier=None,actor=None):
@@ -229,9 +229,9 @@ class IntegrationTests(unittest.TestCase):
             return header.decode(),json.loads(payload)
         header,_=request('GET','/api/dashboard')
         self.assertIn('401 Unauthorized',header)
-        header,result=request('POST','/api/login',dict(correo='test@example.test',password='incorrecta'))
+        header,result=request('POST','/api/login',dict(correo='dcaro@andinamantencion.cl',password='incorrecta'))
         self.assertIn('401 Unauthorized',header)
-        header,result=request('POST','/api/login',dict(correo='test@example.test',password='ContraseñaLocal123!'))
+        header,result=request('POST','/api/login',dict(correo='dcaro@andinamantencion.cl',password='ContraseñaLocal123!'))
         self.assertIn('200 OK',header)
         cookie=re.search(r'Set-Cookie: ([^;]+)',header).group(1)
         csrf=result['csrf']
@@ -245,7 +245,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn('200 OK',header)
         header,result=request('GET','/api/me',cookie=cookie)
         self.assertIn('401 Unauthorized',header)
-        header,result=request('POST','/api/login',dict(correo='test@example.test',password='CambioClave123!'))
+        header,result=request('POST','/api/login',dict(correo='dcaro@andinamantencion.cl',password='CambioClave123!'))
         self.assertIn('200 OK',header)
         cookie=re.search(r'Set-Cookie: ([^;]+)',header).group(1)
         header,result=request('POST','/api/logout',{},cookie,result['csrf'])
@@ -255,3 +255,4 @@ class IntegrationTests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+

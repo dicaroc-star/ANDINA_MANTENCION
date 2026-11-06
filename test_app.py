@@ -169,7 +169,7 @@ class StockTests(unittest.TestCase):
         row=dict(id_incidencia=1,id_usuario=1,estado='REPORTADA')
         with patch('service.one',return_value=row):
             with self.assertRaises(AppError) as caught:
-                self.service.save(self.connection,'incidencia',1,{'__version':'old'},dict(id_usuario=1,rol='SUPERVISOR'))
+                self.service.save(self.connection,'incidencia',1,{'__version':'old'},dict(id_usuario=1,rol='ADMINISTRADOR',correo='dcaro@andinamantencion.cl',estado='ACTIVO'))
         self.assertEqual(caught.exception.status,409)
 
 
@@ -245,3 +245,4 @@ class HTTPTests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+

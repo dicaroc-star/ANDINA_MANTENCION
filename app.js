@@ -11,6 +11,9 @@ const names = {id_usuario:'Reportado / registrado por',fecha_reporte:'Fecha de r
 const relationNames = {id_usuario:'usuario',id_orden:'orden_trabajo'};
 const menuOrder = ['activo','ubicacion','incidencia','orden_trabajo','intervencion','repuesto','consumo_repuesto','mantenimiento_preventivo','historial_estado','usuario','rol'];
 
+const navPaths={dashboard:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',activo:'M4 7h16v13H4z M8 7V4h8v3 M8 12h8',ubicacion:'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z M12 7v6 M9 10h6',incidencia:'M12 3 2 21h20L12 3Z M12 9v5 M12 17v1',orden_trabajo:'M8 5H5v16h14V5h-3 M8 3h8v5H8z M8 12h8 M8 16h5',intervencion:'M14 6a5 5 0 0 0-6 6L3 17l4 4 5-5a5 5 0 0 0 6-6l-3 3-4-4 3-3Z',repuesto:'M3 7 12 3l9 4v11l-9 4-9-4V7Z M3 7l9 4 9-4 M12 11v11',consumo_repuesto:'M4 6h16v14H4z M8 3v6 M16 3v6 M8 14h8',mantenimiento_preventivo:'M4 5h16v16H4z M8 2v6 M16 2v6 M4 10h16 M8 15l3 3 5-5',historial_estado:'M3 12a9 9 0 1 0 3-7 M3 3v6h6 M12 7v6l4 2',usuario:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z M4 22v-3a8 8 0 0 1 16 0v3',rol:'M12 2 3 6v7c0 5 9 9 9 9s9-4 9-9V6l-9-4Z M8 12l3 3 5-6'};
+function navIcon(key){return `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${navPaths[key]||navPaths.activo}"/></svg>`;}
+function stateBadge(value){const safe=String(value??'');const tone=['OPERATIVO','RESUELTA','FINALIZADA'].includes(safe)?'good':['ALTA','CRITICA','DETENIDO'].includes(safe)?'danger':['EN_PROCESO','MANTENIMIENTO','MEDIA','ASIGNADA'].includes(safe)?'warning':'neutral';return `<span class="state-badge ${tone}"><span aria-hidden="true"></span>${esc(safe.replaceAll('_',' '))}</span>`;}
 async function api(path, data) {
   let response;
   try {
@@ -44,7 +47,7 @@ async function enter(result) {
   [metadata,lookups]=await Promise.all([api('/api/meta'),api('/api/lookups')]);
   $('#profile-name').textContent=`${user.nombre} ${user.apellido}`;
   $('#profile-role').textContent=user.rol; $('#avatar').textContent=(user.nombre[0]||'')+(user.apellido[0]||'');
-  $('#navigation').innerHTML=(metadata.incidencia?.writable?'<button id="nav-report-failure" class="report-nav"><span aria-hidden="true">＋</span> Reportar una falla</button>':'')+'<button class="nav-item" data-view="dashboard">▦ <span>Panel principal</span></button>'+menuOrder.filter(table=>metadata[table]).map(table=>`<button class="nav-item" data-view="${table}">◇ <span>${esc(metadata[table].title)}</span></button>`).join('');
+  $('#navigation').innerHTML=(metadata.incidencia?.writable?'<button id="nav-report-failure" class="report-nav"><span aria-hidden="true">＋</span> Reportar una falla</button>':'')+`<button class="nav-item" data-view="dashboard">${navIcon('dashboard')}<span>Panel principal</span></button>`+menuOrder.filter(table=>metadata[table]).map(table=>`<button class="nav-item" data-view="${table}">${navIcon(table)}<span>${esc(metadata[table].title)}</span></button>`).join('');
   $('#nav-report-failure')?.addEventListener('click',reportFailure);
   $('#navigation').querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>render(button.dataset.view)));
   $('#login').hidden=true; $('#app').hidden=false; $('#message').hidden=true;
@@ -159,7 +162,7 @@ async function render(table) {
   try {
     if(table==='dashboard') {
       const dashboard=await api('/api/dashboard'); if(request!==generation)return;
-      $('#content').innerHTML=heading(table,'Datos actuales de tu base de datos.')+reportShortcut()+`<section class="stats">${Object.entries(dashboard.stats).map(([label,value])=>`<article class="card stat"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>Consulta real en Oracle</small></article>`).join('')}</section><section class="card"><div class="card-header"><div><h3>Últimas incidencias</h3><p>Los cinco reportes más recientes</p></div><button class="text-button" id="open-incidents">Ver incidencias →</button></div><div class="table-scroll"><table><thead><tr><th>ID / ACTIVO</th><th>DESCRIPCIÓN</th><th>PRIORIDAD</th><th>ESTADO</th></tr></thead><tbody>${dashboard.incidencias.map(row=>`<tr><td>#${esc(row.id_incidencia)} · ${esc(row.codigo_activo)}</td><td class="wrap">${esc(row.descripcion)}</td><td>${esc(row.prioridad)}</td><td>${esc(row.estado)}</td></tr>`).join('')}</tbody></table></div>${dashboard.incidencias.length?'':'<p class="empty">Todavía no hay incidencias registradas.</p>'}</section><div class="banner dashboard-note">Estás trabajando con datos reales. Los formularios guardan cambios en Oracle y el historial de órdenes se genera automáticamente.</div>`;
+      $('#content').innerHTML=heading(table,'Una vista clara de tu planta, sus equipos y el trabajo pendiente.')+reportShortcut()+`<section class="stats">${Object.entries(dashboard.stats).map(([label,value])=>`<article class="card stat"><div class="stat-top"><span>${esc(label)}</span>${navIcon(label.toLowerCase().includes('activo')?'activo':label.toLowerCase().includes('orden')?'orden_trabajo':'incidencia')}</div><strong>${esc(value)}</strong><small>Estado actual de la operación</small></article>`).join('')}</section><section class="card"><div class="card-header"><div><h3>Últimas incidencias</h3><p>Los cinco reportes más recientes</p></div><button class="text-button" id="open-incidents">Ver incidencias →</button></div><div class="table-scroll"><table><thead><tr><th>ID / ACTIVO</th><th>DESCRIPCIÓN</th><th>PRIORIDAD</th><th>ESTADO</th></tr></thead><tbody>${dashboard.incidencias.map(row=>`<tr><td>#${esc(row.id_incidencia)} · ${esc(row.codigo_activo)}</td><td class="wrap">${esc(row.descripcion)}</td><td>${stateBadge(row.prioridad)}</td><td>${stateBadge(row.estado)}</td></tr>`).join('')}</tbody></table></div>${dashboard.incidencias.length?'':'<p class="empty">Todavía no hay incidencias registradas.</p>'}</section><div class="banner dashboard-note">Trazabilidad de mantenimiento: consulta las incidencias, asigna el trabajo y revisa el historial de cada orden.</div>`;
       $('#dashboard-report-failure')?.addEventListener('click',reportFailure);
       $('#open-incidents').addEventListener('click',()=>render('incidencia'));
     } else {
@@ -188,7 +191,7 @@ async function loadRows() {
     if(request!==listGeneration || table!==current || !user)return;
     rows=result.rows;total=result.total;
     const spec=metadata[table], cols=[spec.pk,...(preferredColumns[table]||spec.fields.map(field=>field.name))];
-    container.innerHTML=rows.length?`<div class="table-scroll"><table><thead><tr>${cols.map(col=>`<th>${esc(fieldLabel(table,col))}</th>`).join('')}<th>Acciones</th></tr></thead><tbody>${rows.map((row,index)=>`<tr>${cols.map(col=>`<td class="wrap" title="${esc(display(table,col,row[col]))}">${esc(display(table,col,row[col]))}</td>`).join('')}<td><div class="row-actions"><button class="text-button" data-detail="${index}">Detalle</button>${canEdit(table,row)?`<button class="text-button" data-edit="${index}">Editar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">No hay registros que coincidan con estos filtros.</p>';
+    container.innerHTML=rows.length?`<div class="table-scroll"><table><thead><tr>${cols.map(col=>`<th>${esc(fieldLabel(table,col))}</th>`).join('')}<th>Acciones</th></tr></thead><tbody>${rows.map((row,index)=>`<tr>${cols.map(col=>`<td class="wrap" title="${esc(display(table,col,row[col]))}">${['estado','prioridad'].includes(col)?stateBadge(row[col]):esc(display(table,col,row[col]))}</td>`).join('')}<td><div class="row-actions"><button class="text-button" data-detail="${index}">Detalle</button>${canEdit(table,row)?`<button class="text-button" data-edit="${index}">Editar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">No hay registros que coincidan con estos filtros.</p>';
     container.querySelectorAll('[data-detail]').forEach(button=>button.addEventListener('click',()=>openDetail(rows[Number(button.dataset.detail)])));
     container.querySelectorAll('[data-edit]').forEach(button=>button.addEventListener('click',()=>openEditor(rows[Number(button.dataset.edit)])));
     $('#page-info').textContent=`${total} registros · Página ${page} de ${Math.max(1,Math.ceil(total/25))}`;
@@ -224,7 +227,9 @@ async function openEditor(row,preset={}) {
   if(current!==table || !user)return;
   editing=row; const spec=metadata[table];$('#record-form').reset();$('#form-error').textContent='';
   $('#editor-title').textContent=`${row?'Editar':'Nuevo registro'} · ${spec.title}`;
-  $('#editor-note').textContent=table==='consumo_repuesto'?'El stock se ajustará al guardar. No se permite stock negativo.':table==='orden_trabajo'?'Cada cambio de estado se registra en el historial. Completa las fechas al iniciar o finalizar.':'Los cambios se guardan en Oracle. Los campos con * son obligatorios.';
+  $('#editor').classList.toggle('report-editor',table==='incidencia'&&!row);
+  $('#save-record').textContent=table==='incidencia'&&!row?'Enviar reporte a mantenimiento →':'Guardar cambios';
+  $('#editor-note').textContent=table==='consumo_repuesto'?'El stock se ajustará al guardar. No se permite stock negativo.':table==='orden_trabajo'?'Cada cambio de estado se registra en el historial. Completa las fechas al iniciar o finalizar.':'Completa los datos del registro. Los campos con * son obligatorios.';
   $('#fields').innerHTML=spec.fields.map(field=>{
     const name=field.name,id='field-'+name;let value=row?.[name]??preset[name]??field.default??'';
     if(field.kind==='date')value=String(value).slice(0,10);
@@ -238,8 +243,14 @@ async function openEditor(row,preset={}) {
       control=`<select id="${id}" name="${name}" ${required}>${choices.map(option=>`<option ${value===option?'selected':''}>${esc(option)}</option>`).join('')}</select>`;
     } else if(field.kind==='text'&&field.length>=500)control=`<textarea id="${id}" name="${name}" maxlength="${field.length}" rows="3" ${required}>${esc(value)}</textarea>`;
     else {const type={integer:'number',money:'number',datetime:'datetime-local',date:'date',email:'email'}[field.kind]||'text';control=`<input id="${id}" name="${name}" type="${type}" value="${esc(value)}" ${required} ${field.length?`maxlength="${field.length}"`:''} ${field.minimum===undefined?'':`min="${field.minimum}" max="${field.maximum}"`} ${['money','integer','datetime'].includes(field.kind)?`step="${field.kind==='money'?'.01':'1'}"`:''}>`;}
-    return `<div class="${field.length>=500?'span-two':''}"><label for="${id}">${esc(field.label)}${field.required?' *':''}</label>${control}</div>`;
+    return `<div class="${field.length>=500?'span-two':''} field-${name}"><label for="${id}">${esc(field.label)}${field.required?' *':''}</label>${control}</div>`;
   }).join('')+(table==='usuario'?`<div class="span-two"><label for="field-password">${row?'Nueva contraseña (vacía para conservar)':'Contraseña inicial *'}</label><input id="field-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" ${row?'':'required'}><small>Entre 12 y 128 caracteres. El servidor guarda solo su hash.</small></div>`:'');
+  if(table==='incidencia'&&!row){
+    $('#editor-title').textContent='Reportar una falla';
+    $('#fields').innerHTML='<div class="report-section-title span-two"><span>01</span><div><strong>Identifica el equipo</strong><small>Comprueba el activo antes de enviar el reporte.</small></div></div>'+$('#fields').innerHTML;
+    $('#editor-note').textContent='Describe lo que ocurre para que mantenimiento pueda revisar el equipo.';
+    $('#field-descripcion').setAttribute('placeholder','Describe qué ocurrió, cuándo comenzó y cómo afecta al equipo.');
+  }
   if(table==='consumo_repuesto' && !row){$('#field-id_repuesto').addEventListener('change',()=>{const item=lookups.repuesto.find(item=>String(item.id)===$('#field-id_repuesto').value);$('#field-precio_unitario').value=item?.precio_unitario??'';});}
   $('#editor').showModal();
   return true;
@@ -269,7 +280,7 @@ function showReportReceipt(id,data) {
     equipo:asset?.label || 'Equipo #'+data.id_activo,
     descripcion:data.descripcion,prioridad:data.prioridad,estado:data.estado||'REPORTADA'};
   $('#receipt-code').textContent=reportReceipt.code;
-  $('#receipt-id').textContent='Registro N.º '+id+' · Oracle';
+  $('#receipt-id').textContent='Incidencia N.º '+id;
   $('#receipt-message').textContent=reportReceipt.estado==='REPORTADA'
     ? 'Gracias por avisarnos. Tu reporte quedó registrado y está listo para revisión.'
     : 'Gracias por avisarnos. Tu reporte quedó registrado correctamente.';
@@ -318,3 +329,4 @@ async function start(){
 }
 setInterval(async()=>{if(!user)return;try{await api('/api/me');if(user)$('#connection-status').textContent='● Oracle conectado';}catch(error){if(user)$('#connection-status').textContent='● Conexión sin confirmar';}},30000);
 start();
+

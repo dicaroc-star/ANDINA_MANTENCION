@@ -33,12 +33,13 @@ function notify(message, error = false) {
   $('#message').hidden=false; $('#message').textContent=message; $('#message').classList.toggle('failure',error);
 }
 function leave() {
+  resetReportPhotos();
   reportReceipt=null;
   qrReportActive=false;
   user=null; csrf=''; metadata={}; lookups={}; rows=[]; generation++; listGeneration++;
   document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());
   $('#app').hidden=true; $('#login').hidden=false; $('#content').replaceChildren(); $('#navigation').replaceChildren();
-  $('#password').value=''; $('#password').type='password'; $('#toggle-password').textContent='Mostrar'; $('#toggle-password').setAttribute('aria-pressed','false');
+  $('#password').value=''; $('#password').type='password'; $('#toggle-password').innerHTML=stitchSymbol('visibility'); $('#toggle-password').setAttribute('aria-pressed','false');
   $('#email').focus();
   updateLoginIntent();
 }
@@ -47,7 +48,7 @@ async function enter(result) {
   [metadata,lookups]=await Promise.all([api('/api/meta'),api('/api/lookups')]);
   $('#profile-name').textContent=`${user.nombre} ${user.apellido}`;
   $('#profile-role').textContent=user.rol; $('#avatar').textContent=(user.nombre[0]||'')+(user.apellido[0]||'');
-  $('#navigation').innerHTML=(metadata.incidencia?.writable?'<button id="nav-report-failure" class="report-nav"><span aria-hidden="true">＋</span> Reportar una falla</button>':'')+`<button class="nav-item" data-view="dashboard">${navIcon('dashboard')}<span>Panel principal</span></button>`+menuOrder.filter(table=>metadata[table]).map(table=>`<button class="nav-item" data-view="${table}">${navIcon(table)}<span>${esc(metadata[table].title)}</span></button>`).join('');
+  $('#navigation').innerHTML=stitchNavigation(metadata);
   $('#nav-report-failure')?.addEventListener('click',reportFailure);
   $('#navigation').querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>render(button.dataset.view)));
   $('#login').hidden=true; $('#app').hidden=false; $('#message').hidden=true;
@@ -61,7 +62,7 @@ function updateLoginIntent() {
   const reporting=Boolean(pendingReport||reportRequested);
   $('#login-title').textContent=reporting?'Inicia sesión para reportar':'Bienvenido';
   $('#report-login-note').hidden=!reporting;
-  $('#login-submit').textContent=reporting?'ENTRAR Y REPORTAR →':'Iniciar sesión →';
+  $('#login-submit').innerHTML=(reporting?'Entrar y reportar':'Iniciar sesión')+stitchSymbol('arrow_forward','text-base');
 }
 function clearReportRequest() {
   reportRequested=false;
@@ -99,6 +100,9 @@ async function continueQrReport() {
   if(!asset) {
     finishQrReport();notify('No se encontró el activo del QR. No se creó ningún reporte.',true);return;
   }
+  if(asset.estado==='INACTIVO'){
+    finishQrReport();notify('El activo de este QR está inactivo. Contacta al responsable de mantenimiento.',true);return;
+  }
   await render('incidencia');
   if(!user || current!=='incidencia')return;
   const opened=await openEditor(null,{id_activo:asset.id,estado:'REPORTADA'});
@@ -123,7 +127,7 @@ async function reportFailure(event) {
     if(opened){
       clearReportRequest();
       $('#editor-title').textContent='Reportar falla';
-      $('#editor-note').textContent='Selecciona el activo, describe lo que ocurre y revisa la prioridad. El reporte se enviará al pulsar Guardar en Oracle.';
+      $('#editor-note').textContent='Selecciona el activo, describe lo que ocurre y revisa la prioridad. Al enviar recibirás el código de tu incidencia.';
       $('#field-id_activo').focus();
     }
   }catch(error){if(user)notify(error.message,true);}
@@ -139,7 +143,7 @@ $('#login-form').addEventListener('submit',async event=>{
   catch(error) { leave(); $('#login-error').textContent=error.message; }
   finally { $('#login-submit').disabled=false; }
 });
-$('#toggle-password').addEventListener('click',()=>{const show=$('#password').type==='password';$('#password').type=show?'text':'password';$('#toggle-password').textContent=show?'Ocultar':'Mostrar';$('#toggle-password').setAttribute('aria-pressed',String(show));});
+$('#toggle-password').addEventListener('click',()=>{const show=$('#password').type==='password';$('#password').type=show?'text':'password';$('#toggle-password').innerHTML=stitchSymbol(show?'visibility_off':'visibility');$('#toggle-password').setAttribute('aria-pressed',String(show));});
 $('#logout').addEventListener('click',async()=>{try { await api('/api/logout',{}); leave(); $('#login-error').textContent=''; } catch(error){notify(error.message,true);} });
 
 function title(table) {return table==='dashboard'?'Panel principal':metadata[table].title;}
@@ -162,13 +166,30 @@ async function render(table) {
   try {
     if(table==='dashboard') {
       const dashboard=await api('/api/dashboard'); if(request!==generation)return;
-      $('#content').innerHTML=heading(table,'Una vista clara de tu planta, sus equipos y el trabajo pendiente.')+reportShortcut()+`<section class="stats">${Object.entries(dashboard.stats).map(([label,value])=>`<article class="card stat"><div class="stat-top"><span>${esc(label)}</span>${navIcon(label.toLowerCase().includes('activo')?'activo':label.toLowerCase().includes('orden')?'orden_trabajo':'incidencia')}</div><strong>${esc(value)}</strong><small>Estado actual de la operación</small></article>`).join('')}</section><section class="card"><div class="card-header"><div><h3>Últimas incidencias</h3><p>Los cinco reportes más recientes</p></div><button class="text-button" id="open-incidents">Ver incidencias →</button></div><div class="table-scroll"><table><thead><tr><th>ID / ACTIVO</th><th>DESCRIPCIÓN</th><th>PRIORIDAD</th><th>ESTADO</th></tr></thead><tbody>${dashboard.incidencias.map(row=>`<tr><td>#${esc(row.id_incidencia)} · ${esc(row.codigo_activo)}</td><td class="wrap">${esc(row.descripcion)}</td><td>${stateBadge(row.prioridad)}</td><td>${stateBadge(row.estado)}</td></tr>`).join('')}</tbody></table></div>${dashboard.incidencias.length?'':'<p class="empty">Todavía no hay incidencias registradas.</p>'}</section><div class="banner dashboard-note">Trazabilidad de mantenimiento: consulta las incidencias, asigna el trabajo y revisa el historial de cada orden.</div>`;
+      $('#content').innerHTML=stitchDashboard(dashboard);
       $('#dashboard-report-failure')?.addEventListener('click',reportFailure);
       $('#open-incidents').addEventListener('click',()=>render('incidencia'));
+      document.querySelectorAll('[data-dashboard-incident]').forEach(button=>button.addEventListener('click',async()=>{
+        const identifier=Number(button.dataset.dashboardIncident);await render('incidencia');
+        if(current!=='incidencia'||!user)return;
+        const found=await api('/api/records/incidencia?page=1&q='+encodeURIComponent(identifier)+'&state=');
+        const record=found.rows.find(row=>Number(row.id_incidencia)===identifier);
+        if(record)openDetail(record);else notify('El registro ya no está disponible.',true);
+      }));
     } else {
       const spec=metadata[table];
       const states=spec.fields.find(field=>field.name==='estado')?.options;
       $('#content').innerHTML=heading(table,table==='historial_estado'?'Trazabilidad automática de los estados de las órdenes.':'Consulta, busca y gestiona los registros de este módulo.')+`<div class="filters"><div><label for="search">Buscar por ID o texto</label><input id="search" type="search" placeholder="Escribe para buscar…" maxlength="150"></div>${states?`<div><label for="state-filter">Estado</label><select id="state-filter"><option value="">Todos</option>${states.map(state=>`<option>${state}</option>`).join('')}</select></div>`:''}<button id="clear" class="secondary">Limpiar</button>${spec.writable?'<button id="new-record" class="primary">+ Nuevo registro</button>':''}</div><section class="card"><div id="records" aria-live="polite"></div><div class="pagination"><span id="page-info"></span><div><button id="previous" class="secondary">← Anterior</button><button id="next" class="secondary">Siguiente →</button></div></div></section><p class="muted small">${table==='consumo_repuesto'?'Al guardar se descuenta stock. Al corregir un consumo se ajusta la diferencia en la misma transacción.':table==='usuario'?'Solo administradores. Una contraseña vacía conserva la actual al editar. Guardar cierra las sesiones de ese usuario.':table==='orden_trabajo'?'Flujo: PENDIENTE → ASIGNADA → EN_PROCESO → FINALIZADA. También puedes cancelar una orden no finalizada.':'Los registros se conservan para mantener sus relaciones. Usa los estados disponibles para desactivar o cancelar.'}</p>`;
+      if(table==='orden_trabajo'){
+        let markup=$('#content').innerHTML;
+        markup=markup.slice(markup.indexOf('<div class="filters">')).replace('<button id="new-record" class="primary">+ Nuevo registro</button>','');
+        let original=stitchOrderSummary().replace('id="new-order-from-model"','id="new-record"');
+        if(!spec.writable)original=original.replace('id="new-record"','id="new-record" hidden');
+        $('#content').innerHTML=original+markup+'<button type="button" id="refresh" hidden>Actualizar</button>';
+        $('#export-orders').addEventListener('click',()=>{
+          const blob=new Blob([JSON.stringify(rows,null,2)],{type:'application/json;charset=utf-8'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='ordenes-de-trabajo.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+        });
+      }
       $('#search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{page=1;loadRows();},300);});
       $('#state-filter')?.addEventListener('change',()=>{page=1;loadRows();});
       $('#clear').addEventListener('click',()=>{$('#search').value='';if($('#state-filter'))$('#state-filter').value='';page=1;loadRows();});
@@ -191,7 +212,7 @@ async function loadRows() {
     if(request!==listGeneration || table!==current || !user)return;
     rows=result.rows;total=result.total;
     const spec=metadata[table], cols=[spec.pk,...(preferredColumns[table]||spec.fields.map(field=>field.name))];
-    container.innerHTML=rows.length?`<div class="table-scroll"><table><thead><tr>${cols.map(col=>`<th>${esc(fieldLabel(table,col))}</th>`).join('')}<th>Acciones</th></tr></thead><tbody>${rows.map((row,index)=>`<tr>${cols.map(col=>`<td class="wrap" title="${esc(display(table,col,row[col]))}">${['estado','prioridad'].includes(col)?stateBadge(row[col]):esc(display(table,col,row[col]))}</td>`).join('')}<td><div class="row-actions"><button class="text-button" data-detail="${index}">Detalle</button>${canEdit(table,row)?`<button class="text-button" data-edit="${index}">Editar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">No hay registros que coincidan con estos filtros.</p>';
+    container.innerHTML=(table==='orden_trabajo'&&rows.length)?stitchOrderRows(rows):rows.length?`<div class="table-scroll"><table><thead><tr>${cols.map(col=>`<th>${esc(fieldLabel(table,col))}</th>`).join('')}<th>Acciones</th></tr></thead><tbody>${rows.map((row,index)=>`<tr>${cols.map(col=>`<td class="wrap" title="${esc(display(table,col,row[col]))}">${['estado','prioridad'].includes(col)?stateBadge(row[col]):esc(display(table,col,row[col]))}</td>`).join('')}<td><div class="row-actions"><button class="text-button" data-detail="${index}">Detalle</button>${canEdit(table,row)?`<button class="text-button" data-edit="${index}">Editar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">No hay registros que coincidan con estos filtros.</p>';
     container.querySelectorAll('[data-detail]').forEach(button=>button.addEventListener('click',()=>openDetail(rows[Number(button.dataset.detail)])));
     container.querySelectorAll('[data-edit]').forEach(button=>button.addEventListener('click',()=>openEditor(rows[Number(button.dataset.edit)])));
     $('#page-info').textContent=`${total} registros · Página ${page} de ${Math.max(1,Math.ceil(total/25))}`;
@@ -209,7 +230,13 @@ function canEdit(table,row) {
 }
 function openDetail(row) {
   const spec=metadata[current];$('#detail-title').textContent=`${spec.title} · #${row[spec.pk]}`;
-  $('#detail-content').innerHTML=spec.columns.map(col=>`<dt>${esc(fieldLabel(current,col))}</dt><dd>${esc(display(current,col,row[col]))}</dd>`).join('');
+  $('#detail-content').classList.toggle('order-detail',current==='orden_trabajo');
+  $('#detail-content').innerHTML=current==='orden_trabajo'?stitchOrderDetail(row):'<dl class="record-detail-data">'+spec.columns.map(col=>`<dt>${esc(fieldLabel(current,col))}</dt><dd>${esc(display(current,col,row[col]))}</dd>`).join('')+'</dl>';
+  if(current==='incidencia'){
+    $('#detail-content').innerHTML+='<section id="incident-photos" class="incident-photos" aria-live="polite">Cargando fotografías…</section>';
+    loadIncidentPhotos(row.id_incidencia);
+  }
+  if(current==='activo')$('#detail-content').innerHTML+=`<section class="asset-qr"><h3>QR del activo</h3><p>Escanea para reportar una falla de este equipo.</p><img src="/api/activos/${Number(row.id_activo)}/qr" alt="QR del activo ${esc(row.codigo_activo)}"><strong>${esc(row.codigo_activo)}</strong><div><a class="primary" href="/api/activos/${Number(row.id_activo)}/qr" download="QR-${esc(row.codigo_activo)}.png">Descargar QR</a><a class="secondary" href="/?reportar=${encodeURIComponent(row.codigo_activo)}">Abrir reporte</a></div></section>`;
   $('#detail').showModal();
 }
 function optionsFor(field,row) {
@@ -222,7 +249,9 @@ function optionsFor(field,row) {
   return list;
 }
 async function openEditor(row,preset={}) {
+  resetReportPhotos();
   const table=current;
+  $('#save-record').disabled=false;
   try{lookups=await api('/api/lookups');}catch(error){notify(error.message,true);return;}
   if(current!==table || !user)return;
   editing=row; const spec=metadata[table];$('#record-form').reset();$('#form-error').textContent='';
@@ -246,22 +275,28 @@ async function openEditor(row,preset={}) {
     return `<div class="${field.length>=500?'span-two':''} field-${name}"><label for="${id}">${esc(field.label)}${field.required?' *':''}</label>${control}</div>`;
   }).join('')+(table==='usuario'?`<div class="span-two"><label for="field-password">${row?'Nueva contraseña (vacía para conservar)':'Contraseña inicial *'}</label><input id="field-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" ${row?'':'required'}><small>Entre 12 y 128 caracteres. El servidor guarda solo su hash.</small></div>`:'');
   if(table==='incidencia'&&!row){
-    $('#editor-title').textContent='Reportar una falla';
-    $('#fields').innerHTML='<div class="report-section-title span-two"><span>01</span><div><strong>Identifica el equipo</strong><small>Comprueba el activo antes de enviar el reporte.</small></div></div>'+$('#fields').innerHTML;
+    $('#editor-title').textContent='Reportar una falla técnica';
+    $('#fields').innerHTML=stitchReportFields(preset);
+    initializePhotoPicker();
+    $('#field-id_activo').addEventListener('change',()=>{$('#report-location').value=stitchAssetLocation($('#field-id_activo').value);});
     $('#editor-note').textContent='Describe lo que ocurre para que mantenimiento pueda revisar el equipo.';
-    $('#field-descripcion').setAttribute('placeholder','Describe qué ocurrió, cuándo comenzó y cómo afecta al equipo.');
   }
   if(table==='consumo_repuesto' && !row){$('#field-id_repuesto').addEventListener('change',()=>{const item=lookups.repuesto.find(item=>String(item.id)===$('#field-id_repuesto').value);$('#field-precio_unitario').value=item?.precio_unitario??'';});}
   $('#editor').showModal();
   return true;
 }
 $('#record-form').addEventListener('submit',async event=>{
-  event.preventDefault();const table=current;const data=Object.fromEntries(new FormData(event.target));
+  event.preventDefault();
+  if(photoBusy){$('#form-error').textContent='Espera a que termine la preparación de las fotografías.';return;}
+  const table=current;const data=Object.fromEntries(new FormData(event.target));
   metadata[table].fields.filter(field=>['ref','integer'].includes(field.kind)).forEach(field=>{if(data[field.name]!=='')data[field.name]=Number(data[field.name]);});
   if(editing)data.__version=editing.__version;
   $('#save-record').disabled=true;$('#cancel-editor').disabled=true;$('#close-editor').disabled=true;$('#form-error').textContent='';
   try {
-    const result=await api('/api/records/'+table,{id:editing?.[metadata[table].pk]??null,data});
+    const payload={id:editing?.[metadata[table].pk]??null,data};
+    if(table==='incidencia'&&!editing&&reportPhotos.length)payload.evidencias=reportPhotos.map(({nombre,contenido})=>({nombre,contenido}));
+    const result=await api('/api/records/'+table,payload);
+    resetReportPhotos();
     if(qrReportActive && table==='incidencia' && !editing)finishQrReport();
     $('#editor').close();
     if(table==='incidencia' && !editing){
@@ -308,8 +343,8 @@ $('#download-ticket').addEventListener('click',()=>{
 function closeReportTicket() {$('#report-ticket').close();reportReceipt=null;}
 ['#close-ticket','#done-ticket'].forEach(selector=>$(selector).addEventListener('click',closeReportTicket));
 $('#report-ticket').addEventListener('cancel',()=>{reportReceipt=null;});
-$('#editor').addEventListener('cancel',event=>{if($('#save-record').disabled)event.preventDefault();else if(qrReportActive)finishQrReport();});
-['#close-editor','#cancel-editor'].forEach(selector=>$(selector).addEventListener('click',()=>{if(qrReportActive)finishQrReport();$('#editor').close();}));
+$('#editor').addEventListener('cancel',event=>{if($('#save-record').disabled)event.preventDefault();else{resetReportPhotos();if(qrReportActive)finishQrReport();}});
+['#close-editor','#cancel-editor'].forEach(selector=>$(selector).addEventListener('click',()=>{if(qrReportActive)finishQrReport();resetReportPhotos();$('#editor').close();}));
 $('#close-detail').addEventListener('click',()=>$('#detail').close());
 $('#change-password').addEventListener('click',()=>{$('#password-form').reset();$('#password-error').textContent='';$('#password-dialog').showModal();});
 $('#cancel-password').addEventListener('click',()=>$('#password-dialog').close());
@@ -330,3 +365,5 @@ async function start(){
 setInterval(async()=>{if(!user)return;try{await api('/api/me');if(user)$('#connection-status').textContent='● Oracle conectado';}catch(error){if(user)$('#connection-status').textContent='● Conexión sin confirmar';}},30000);
 start();
 
+
+$('#copy-ticket')?.addEventListener('click',async()=>{if(reportReceipt){try{await navigator.clipboard.writeText(reportReceipt.code);notify('Código de reporte copiado.');}catch(_){notify('Selecciona y copia el código mostrado.',true);}}});

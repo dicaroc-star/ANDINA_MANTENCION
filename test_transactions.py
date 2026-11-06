@@ -34,6 +34,8 @@ class Cursor:
         self.inner.close()
     def var(self,*args):
         return Output()
+    def setinputsizes(self,**kwargs):
+        pass
     @property
     def description(self):
         return self.inner.description
@@ -50,6 +52,7 @@ class Cursor:
             sql=re.sub(r' RETURNING \w+ INTO :new_id$','',sql)
         sql=re.sub(r' OFFSET :skip ROWS FETCH NEXT 25 ROWS ONLY$', ' LIMIT 25 OFFSET :skip',sql)
         sql=re.sub(r' FETCH FIRST (\d+) ROWS ONLY$',r' LIMIT \1',sql)
+        sql=re.sub(r' FROM dual$','',sql)
         self.inner.execute(sql,binds)
         if output:
             output.value=self.inner.lastrowid
@@ -86,6 +89,14 @@ class Connection:
                 declarations.append('clave_hash TEXT NOT NULL')
             self.db.execute(f"CREATE TABLE {table} ({','.join(declarations)})")
         self.db.execute("INSERT INTO rol(nombre) VALUES ('ADMINISTRADOR')")
+        self.db.execute('''CREATE TABLE incidencia_evidencia (
+          id_evidencia INTEGER PRIMARY KEY AUTOINCREMENT,
+          id_incidencia INTEGER NOT NULL REFERENCES incidencia(id_incidencia),
+          id_usuario INTEGER NOT NULL REFERENCES usuario(id_usuario),
+          posicion INTEGER NOT NULL CHECK(posicion BETWEEN 1 AND 3),
+          nombre TEXT NOT NULL,contenido BLOB NOT NULL,ancho INTEGER NOT NULL,alto INTEGER NOT NULL,
+          fecha_creacion TIMESTAMP DEFAULT (datetime('now','localtime')),
+          UNIQUE(id_incidencia,posicion))''')
         self.db.execute('INSERT INTO usuario(nombre,apellido,correo,estado,id_rol,clave_hash) VALUES (?,?,?,?,?,?)',('CUENTA','TEST','dcaro@andinamantencion.cl','ACTIVO',1,hash_password('ContraseñaLocal123!')))
         self.db.commit()
     def cursor(self):
@@ -160,6 +171,10 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(dashboard['stats']['Incidencias abiertas'],0)
         self.assertEqual(dashboard['stats']['Órdenes en proceso'],0)
         self.assertEqual(dashboard['stats']['Activos operativos'],1)
+        self.assertEqual(len(dashboard['semanas']),8)
+        self.assertEqual(sum(week['total'] for week in dashboard['semanas']),1)
+        self.assertEqual(dashboard['ordenes_estado'],[dict(estado='FINALIZADA',total=1)])
+        self.assertEqual(dashboard['preventivos'],[])
         self.assertEqual(len(self.service.lookups(self.connection)['activo']),1)
 
     def test_failed_consumption_rolls_back_stock_and_record(self):

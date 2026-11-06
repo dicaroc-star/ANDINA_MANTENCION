@@ -29,6 +29,9 @@ async function fetch(path,options){calls.push({path,options});let result,status=
  return {ok:status===200,status,json:async()=>result};
 }
 const context=vm.createContext({document,fetch,location:{protocol:'http:',search:'',pathname:'/',hash:''},history:{replaceState(){}},URLSearchParams,setInterval(){},setTimeout,clearTimeout,FormData:class{constructor(form){return Object.entries(form.formData||{});}}});
+vm.runInContext(fs.readFileSync('stitch-templates.js','utf8'),context);
+vm.runInContext(fs.readFileSync('reference-views.js','utf8'),context);
+vm.runInContext(fs.readFileSync('photos.js','utf8'),context);
 vm.runInContext(source,context);
 const run=code=>vm.runInContext(code,context);
 (async()=>{
@@ -51,7 +54,7 @@ const run=code=>vm.runInContext(code,context);
  const beforeQr=calls.filter(call=>call.options.method==='POST').length;
  await run("pendingReport='EXT-001';continueQrReport()");
  assert.equal(elements.get('#field-id_activo').value,'1');
- assert.equal(elements.get('#editor-title').textContent,'Reportar una falla');
+ assert.equal(elements.get('#editor-title').textContent,'Reportar una falla técnica');
  assert.match(elements.get('#save-record').textContent,/Enviar reporte/);
  assert.ok(elements.get('#editor').open);
  assert.equal(calls.filter(call=>call.options.method==='POST').length,beforeQr);

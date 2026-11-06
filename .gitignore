@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+node_modules/
+.local-deps/
+.qa-deps/
+.env
+.env.*
+*.pem
+*.ora
+Wallet*.zip
+wallet*.zip
+output/

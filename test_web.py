@@ -51,6 +51,18 @@ class WebTests(unittest.TestCase):
         for path in ('/.env','/web.py','/server.py','/ewallet.pem','/tnsnames.ora'):
             self.assertTrue(self.request(path)['status'].startswith('404'))
 
+    def test_original_design_assets_are_local_and_allowlisted(self):
+        for path in ('/stitch-templates.js','/reference-views.js','/reference-design.css','/assets/fonts.css','/assets/text-0.ttf','/assets/icons-0.ttf'):
+            result=self.request(path)
+            self.assertTrue(result['status'].startswith('200'),path)
+            self.assertTrue(result['raw'])
+        font=self.request('/assets/text-0.ttf')
+        self.assertEqual(font['headers']['Content-Type'],'font/ttf')
+        self.assertEqual(font['raw'][:4],b'\x00\x01\x00\x00')
+        self.assertIn("font-src 'self'",font['headers']['Content-Security-Policy'])
+        self.assertTrue(self.request('/assets/../server.py')['status'].startswith('404'))
+        self.assertTrue(self.request('/asset-manifest.json')['status'].startswith('404'))
+
     def test_registered_login_secure_cookie_csrf_write_logout(self):
         cookie,csrf=self.login()
         self.assertTrue(cookie.startswith('__Host-andina_session='))

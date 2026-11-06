@@ -2,11 +2,11 @@
 import hashlib
 import json
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 
 import oracledb
-from schema import TABLES, ORDER_STATES, ROLE_NAMES, columns, can_read, can_write
+from schema import TABLES, ORDER_STATES, ROLE_NAMES, MANAGERS, columns, can_read, can_write
 from security import hash_password
 
 OWNER_EMAIL = 'dcaro@andinamantencion.cl'
@@ -17,11 +17,8 @@ def is_owner(user):
             and user.get('estado') == 'ACTIVO')
 
 def can_manage_record(table, identifier, user):
-    if is_owner(user):
-        return table in TABLES and can_write(table, user['rol'])
-    return (table == 'incidencia' and identifier is None
-            and user.get('estado') == 'ACTIVO'
-            and can_write(table, user.get('rol')))
+    return (table in TABLES and user.get('estado')=='ACTIVO'
+            and can_write(table,user.get('rol')))
 
 class AppError(Exception):
     def __init__(self,message,status=400):
@@ -163,7 +160,7 @@ class Service:
         user = user or {}
         return {name:{**spec, 'columns':columns(name),
                       'writable':can_manage_record(name,None,user),
-                      'editable':is_owner(user) and can_write(name,role)}
+                      'editable':can_manage_record(name,1,user)}
                 for name,spec in TABLES.items() if can_read(name,role)}
 
     def list_rows(self,connection,table,role,page=1,search='',state=''):
@@ -192,9 +189,9 @@ class Service:
         statements={
          'rol':"SELECT id_rol AS id,nombre AS label FROM rol ORDER BY nombre",
          'ubicacion':"SELECT id_ubicacion AS id,nombre AS label FROM ubicacion ORDER BY nombre",
-         'activo':"SELECT id_activo AS id,codigo_activo,codigo_activo||' · '||nombre AS label,estado FROM activo ORDER BY codigo_activo",
+         'activo':"SELECT id_activo AS id,codigo_activo,codigo_activo||' · '||nombre AS label,estado,id_ubicacion FROM activo ORDER BY codigo_activo",
          'usuario':"SELECT id_usuario AS id,nombre||' '||apellido AS label,estado FROM usuario ORDER BY nombre,apellido",
-         'incidencia':"SELECT id_incidencia AS id,'#'||id_incidencia||' · '||SUBSTR(descripcion,1,90) AS label,estado FROM incidencia ORDER BY id_incidencia DESC",
+         'incidencia':"SELECT id_incidencia AS id,'#'||id_incidencia||' · '||SUBSTR(descripcion,1,90) AS label,estado,id_activo,prioridad FROM incidencia ORDER BY id_incidencia DESC",
          'orden_trabajo':"SELECT id_orden AS id,'Orden #'||id_orden||' · '||estado AS label,estado,id_usuario_asignado FROM orden_trabajo ORDER BY id_orden DESC",
          'intervencion':"SELECT id_intervencion AS id,'Intervención #'||id_intervencion||' · Orden #'||id_orden AS label,id_usuario,id_orden FROM intervencion ORDER BY id_intervencion DESC",
          'repuesto':"SELECT id_repuesto AS id,codigo_repuesto||' · '||nombre AS label,estado,stock_actual,precio_unitario FROM repuesto ORDER BY codigo_repuesto"
@@ -213,7 +210,24 @@ class Service:
          'Preventivos programados':"SELECT COUNT(*) AS value FROM mantenimiento_preventivo WHERE estado='PROGRAMADO'",
          'Repuestos bajo mínimo':"SELECT COUNT(*) AS value FROM repuesto WHERE estado='ACTIVO' AND stock_actual<stock_minimo"
         }
+        # CURRENT_DATE respeta la zona America/Santiago configurada en la sesión Oracle.
+        today_value=one(connection,'SELECT CURRENT_DATE AS hoy FROM dual')['hoy']
+        today=today_value.date() if isinstance(today_value,datetime) else date.fromisoformat(str(today_value)[:10])
+        monday=today-timedelta(days=today.weekday())
+        start=monday-timedelta(weeks=7)
+        weeks=[dict(fecha=(start+timedelta(weeks=i)).isoformat(),total=0) for i in range(8)]
+        for report in query(connection,'SELECT fecha_reporte FROM incidencia WHERE fecha_reporte >= :desde AND fecha_reporte < :hasta',
+                            dict(desde=datetime.combine(start,datetime.min.time()),hasta=datetime.combine(today+timedelta(days=1),datetime.min.time()))):
+            value=report['fecha_reporte']
+            report_date=value.date() if isinstance(value,datetime) else date.fromisoformat(str(value)[:10])
+            index=(report_date-start).days//7
+            if 0<=index<8:weeks[index]['total']+=1
         return dict(stats={label:one(connection,sql)['value'] for label,sql in stats.items()},
+                    semanas=weeks,
+                    ordenes_estado=query(connection,'SELECT estado,COUNT(*) AS total FROM orden_trabajo GROUP BY estado'),
+                    preventivos=query(connection,'''SELECT m.id_mantenimiento,m.descripcion,m.fecha_programada,a.codigo_activo
+                     FROM mantenimiento_preventivo m JOIN activo a ON a.id_activo=m.id_activo
+                     WHERE m.estado='PROGRAMADO' ORDER BY m.fecha_programada,m.id_mantenimiento FETCH FIRST 3 ROWS ONLY'''),
                     incidencias=query(connection,'''SELECT i.id_incidencia,a.codigo_activo,i.descripcion,i.prioridad,i.estado,i.fecha_reporte
                      FROM incidencia i JOIN activo a ON a.id_activo=i.id_activo ORDER BY i.id_incidencia DESC FETCH FIRST 5 ROWS ONLY'''))
 
@@ -241,7 +255,7 @@ class Service:
         clean=validate(table,data,creating=old is None)
         check_dates(table,clean,old)
         if table=='incidencia':
-            if not is_owner(user):
+            if role not in MANAGERS:
                 if old and (old['id_usuario']!=user['id_usuario'] or old['estado']!='REPORTADA'):
                     raise AppError('Solo puedes editar tus incidencias mientras estén REPORTADAS.',403)
                 if clean['estado']!='REPORTADA':

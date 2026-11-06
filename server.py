@@ -13,6 +13,7 @@ from zipfile import ZipFile, BadZipFile
 import hmac
 import hashlib
 import json
+import re
 import secrets
 import sys
 import time
@@ -22,6 +23,8 @@ import oracledb
 from schema import TABLES, columns, ROLE_NAMES
 from security import Sessions, hash_password, verify_password
 from service import Service, AppError, query, one, serial
+import evidence
+import qr_assets
 
 ROOT=Path(__file__).resolve().parent
 HOST='127.0.0.1'
@@ -30,7 +33,12 @@ ORIGIN=f'http://{HOST}:{PORT}'
 PUBLIC={'/':('index.html','text/html; charset=utf-8'),
         '/index.html':('index.html','text/html; charset=utf-8'),
         '/app.js':('app.js','text/javascript; charset=utf-8'),
-        '/styles.css':('styles.css','text/css; charset=utf-8')}
+        '/styles.css':('styles.css','text/css; charset=utf-8'),
+        '/reference-design.css':('reference-design.css','text/css; charset=utf-8'),
+        '/reference-views.js':('reference-views.js','text/javascript; charset=utf-8')}
+PUBLIC['/photos.js']=('photos.js','text/javascript; charset=utf-8')
+
+PUBLIC.update({key:tuple(value) for key,value in json.loads((ROOT/'asset-manifest.json').read_text(encoding='utf-8')).items()})
 
 def configure_session(connection,requested_tag):
     # LOCALTIMESTAMP usa la zona de la sesión: la fijamos para coincidir con la interfaz chilena.
@@ -77,7 +85,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('X-Content-Type-Options','nosniff')
         self.send_header('Referrer-Policy','no-referrer')
         self.send_header('X-Frame-Options','DENY')
-        self.send_header('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+        self.send_header('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self' blob:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
         if cookie:
             self.send_header('Set-Cookie',cookie)
         self.end_headers()
@@ -102,7 +110,8 @@ class Handler(BaseHTTPRequestHandler):
             size=int(self.headers.get('Content-Length','0'))
         except ValueError:
             raise AppError('Tamaño de solicitud inválido.')
-        if not 0<size<=32768:
+        limit=evidence.MAX_REQUEST if urlsplit(self.path).path=='/api/records/incidencia' else 32768
+        if not 0<size<=limit:
             raise AppError('La solicitud está vacía o es demasiado grande.',413)
         try:
             body=json.loads(self.rfile.read(size))
@@ -110,6 +119,8 @@ class Handler(BaseHTTPRequestHandler):
             raise AppError('El formulario no es válido.')
         if not isinstance(body,dict):
             raise AppError('Se esperaba un formulario JSON.')
+        if size>32768 and not body.get('evidencias'):
+            raise AppError('El formulario es demasiado grande.',413)
         return body
 
     def cookie_token(self):
@@ -201,11 +212,22 @@ class Handler(BaseHTTPRequestHandler):
                     self.app.sessions.revoke_user(user['id_usuario'])
                     self.respond(200,dict(ok=True),cookie='andina_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0')
                 elif path=='/api/meta' and not mutation:
-                    self.respond(200,self.app.service.metadata(user['rol'],user))
+                    meta=self.app.service.metadata(user['rol'],user)
+                    if 'incidencia' in meta:
+                        meta['incidencia']['evidencia_habilitada']=evidence.available(connection)
+                    self.respond(200,meta)
                 elif path=='/api/lookups' and not mutation:
                     self.respond(200,self.app.service.lookups(connection))
                 elif path=='/api/dashboard' and not mutation:
                     self.respond(200,self.app.service.dashboard(connection))
+                elif re.fullmatch(r'/api/activos/[1-9][0-9]*/qr',path) and not mutation:
+                    asset=self.app.service.require(connection,'activo',int(path.split('/')[3]))
+                    origin=self.settings.origin if hasattr(self,'settings') else ORIGIN
+                    self.respond(200,qr_assets.image(origin,asset['codigo_activo']),'image/png')
+                elif re.fullmatch(r'/api/incidencias/[1-9][0-9]*/evidencias',path) and not mutation:
+                    self.respond(200,dict(evidencias=evidence.listing(connection,int(path.split('/')[3]))))
+                elif re.fullmatch(r'/api/evidencias/[1-9][0-9]*',path) and not mutation:
+                    self.respond(200,evidence.read(connection,int(path.rsplit('/',1)[1])),'image/jpeg')
                 elif path.startswith('/api/records/'):
                     table=path.removeprefix('/api/records/')
                     if table not in TABLES:
@@ -214,8 +236,16 @@ class Handler(BaseHTTPRequestHandler):
                         identifier=body.get('id')
                         if identifier is not None and (type(identifier) is not int or identifier<=0):
                             raise AppError('Identificador inválido.')
+                        photographs=[]
+                        if 'evidencias' in body:
+                            if table!='incidencia' or identifier is not None:
+                                raise AppError('Adjunta las fotografías al crear la incidencia.')
+                            photographs=evidence.normalize(body['evidencias'])
+                            if photographs and not evidence.available(connection):
+                                raise AppError('El almacenamiento de fotografías aún no está activado. No se guardó el reporte.',503)
                         try:
                             saved=self.app.service.save(connection,table,identifier,body.get('data'),user)
+                            if photographs:evidence.attach(connection,saved,user,photographs)
                             connection.commit()
                         except Exception:
                             connection.rollback()

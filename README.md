@@ -102,3 +102,7 @@ Las funcionalidades y su cumplimiento serán revisados en los hitos establecidos
 ---
 
 **AndinaMantención — Duoc UC — 2026**
+
+## Entrega funcional actual
+
+Consulta [ENTREGA.md](ENTREGA.md) para las funciones implementadas, los permisos, la activación de fotografías y las pruebas de esta versión.

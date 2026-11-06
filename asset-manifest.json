@@ -1,0 +1,70 @@
+{
+  "/assets/fonts.css": [
+    "assets/fonts.css",
+    "text/css; charset=utf-8"
+  ],
+  "/assets/icons-0.ttf": [
+    "assets/icons-0.ttf",
+    "font/ttf"
+  ],
+  "/assets/icons-1.ttf": [
+    "assets/icons-1.ttf",
+    "font/ttf"
+  ],
+  "/assets/icons-2.ttf": [
+    "assets/icons-2.ttf",
+    "font/ttf"
+  ],
+  "/assets/icons-3.ttf": [
+    "assets/icons-3.ttf",
+    "font/ttf"
+  ],
+  "/assets/icons-4.ttf": [
+    "assets/icons-4.ttf",
+    "font/ttf"
+  ],
+  "/assets/icons-5.ttf": [
+    "assets/icons-5.ttf",
+    "font/ttf"
+  ],
+  "/assets/icons-6.ttf": [
+    "assets/icons-6.ttf",
+    "font/ttf"
+  ],
+  "/assets/text-0.ttf": [
+    "assets/text-0.ttf",
+    "font/ttf"
+  ],
+  "/assets/text-1.ttf": [
+    "assets/text-1.ttf",
+    "font/ttf"
+  ],
+  "/assets/text-2.ttf": [
+    "assets/text-2.ttf",
+    "font/ttf"
+  ],
+  "/assets/text-3.ttf": [
+    "assets/text-3.ttf",
+    "font/ttf"
+  ],
+  "/assets/text-4.ttf": [
+    "assets/text-4.ttf",
+    "font/ttf"
+  ],
+  "/assets/text-5.ttf": [
+    "assets/text-5.ttf",
+    "font/ttf"
+  ],
+  "/assets/text-6.ttf": [
+    "assets/text-6.ttf",
+    "font/ttf"
+  ],
+  "/assets/text-7.ttf": [
+    "assets/text-7.ttf",
+    "font/ttf"
+  ],
+  "/stitch-templates.js": [
+    "stitch-templates.js",
+    "text/javascript; charset=utf-8"
+  ]
+}

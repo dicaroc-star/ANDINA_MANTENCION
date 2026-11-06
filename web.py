@@ -155,7 +155,7 @@ class WebHandler(Handler):
                  ('Cache-Control','no-store'),('X-Content-Type-Options','nosniff'),
                  ('Referrer-Policy','no-referrer'),('X-Frame-Options','DENY'),
                  ('Permissions-Policy','camera=(), microphone=(), geolocation=()'),
-                 ('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
+                 ('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; img-src 'self' blob:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
         if self.settings.production:
             headers.append(('Strict-Transport-Security','max-age=31536000'))
         if cookie:
@@ -283,7 +283,7 @@ def main():
         raise SystemExit(1)
     port=int(os.environ.get('PORT','10000'))
     options=dict(host='0.0.0.0',port=port,threads=8,connection_limit=100,
-                 channel_timeout=30,max_request_body_size=32768,expose_tracebacks=False,
+                 channel_timeout=30,max_request_body_size=8_100_000,expose_tracebacks=False,
                  clear_untrusted_proxy_headers=True)
     # Render termina TLS y entrega el tráfico por su proxy. Otros entornos deben declarar su proxy exacto.
     proxy=os.environ.get('TRUSTED_PROXY')

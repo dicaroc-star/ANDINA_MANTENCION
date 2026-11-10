@@ -42,6 +42,16 @@ def one(connection,sql,binds=None):
     rows=query(connection,sql,binds)
     return rows[0] if rows else None
 
+def preventive_alert_status(value, today):
+    """Clasifica un preventivo programado usando la fecha local de Oracle."""
+    scheduled = (value.date() if isinstance(value, datetime) else
+                 value if isinstance(value, date) else date.fromisoformat(str(value)[:10]))
+    if scheduled < today:
+        return 'Vencido'
+    if scheduled <= today + timedelta(days=7):
+        return 'Próximo'
+    return None
+
 def version(row):
     # Incluye el hash de la clave solo en el cálculo interno, nunca en la respuesta.
     return hashlib.sha256(json.dumps(row,sort_keys=True,default=serial).encode()).hexdigest()
@@ -222,7 +232,19 @@ class Service:
             report_date=value.date() if isinstance(value,datetime) else date.fromisoformat(str(value)[:10])
             index=(report_date-start).days//7
             if 0<=index<8:weeks[index]['total']+=1
+        # Sprint 2: alertas reales, solo lectura, sin modificar registros.
+        # El límite incluye la totalidad del séptimo día futuro.
+        alert_rows=query(connection,'''SELECT m.id_mantenimiento,m.descripcion,m.fecha_programada,
+                     a.codigo_activo,u.nombre AS responsable_nombre,u.apellido AS responsable_apellido
+                     FROM mantenimiento_preventivo m JOIN activo a ON a.id_activo=m.id_activo
+                     LEFT JOIN usuario u ON u.id_usuario=m.id_usuario_responsable
+                     WHERE m.estado='PROGRAMADO' AND m.fecha_programada < :hasta
+                     ORDER BY m.fecha_programada,m.id_mantenimiento FETCH FIRST 25 ROWS ONLY''',
+                     dict(hasta=datetime.combine(today+timedelta(days=8),datetime.min.time())))
+        for alert in alert_rows:
+            alert['tipo_alerta']=preventive_alert_status(alert['fecha_programada'],today)
         return dict(stats={label:one(connection,sql)['value'] for label,sql in stats.items()},
+                    alertas_preventivos=alert_rows,
                     semanas=weeks,
                     ordenes_estado=query(connection,'SELECT estado,COUNT(*) AS total FROM orden_trabajo GROUP BY estado'),
                     preventivos=query(connection,'''SELECT m.id_mantenimiento,m.descripcion,m.fecha_programada,a.codigo_activo

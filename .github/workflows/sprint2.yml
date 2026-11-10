@@ -1,0 +1,30 @@
+name: Pruebas Sprint 2
+on:
+  push:
+    branches:
+      - sprint-2-alertas-20261110
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements.txt
+      - name: Pruebas de backend y Sprint 2
+        run: python -m unittest test_app test_transactions test_web test_evidence test_roles test_qr test_sprint2
+      - name: Pruebas de interfaz
+        run: node test_frontend.cjs

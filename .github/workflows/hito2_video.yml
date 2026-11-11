@@ -24,6 +24,10 @@ jobs:
           python -m playwright install chromium --with-deps
       - name: Grabar navegación real en entorno de prueba
         run: python demo_hito2_video.py
+      - name: Instalar FFmpeg para exportar MP4
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
       - name: Convertir a MP4 y marcar entorno de prueba
         run: |
           ffmpeg -y -i video_hito2/demo_original.webm \

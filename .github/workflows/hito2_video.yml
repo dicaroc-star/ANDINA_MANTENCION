@@ -1,0 +1,40 @@
+name: Video del Hito 2 (datos de prueba)
+on:
+  push:
+    branches: [hito2-video-evidencia-20261110]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  grabar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Descargar AndinaMantención
+        uses: actions/checkout@v4
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias de prueba y navegador
+        run: |
+          python -m pip install -r requirements.txt playwright
+          python -m playwright install chromium --with-deps
+      - name: Grabar navegación real en entorno de prueba
+        run: python demo_hito2_video.py
+      - name: Convertir a MP4 y marcar entorno de prueba
+        run: |
+          ffmpeg -y -i video_hito2/demo_original.webm \
+            -vf "drawbox=x=0:y=0:w=iw:h=42:color=black@0.82:t=fill,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='DEMOSTRACION LOCAL - DATOS FICTICIOS (NO ORACLE REAL)':fontcolor=white:fontsize=20:x=16:y=10" \
+            -c:v libx264 -crf 23 -preset veryfast -pix_fmt yuv420p \
+            -movflags +faststart -an video_hito2/AndinaMantencion_Hito2_DEMO_LOCAL.mp4
+      - name: Publicar video y captura
+        uses: actions/upload-artifact@v4
+        with:
+          name: Video-Hito2-DemoLocal
+          path: |
+            video_hito2/AndinaMantencion_Hito2_DEMO_LOCAL.mp4
+            video_hito2/captura_final.png
+          retention-days: 30

@@ -6,7 +6,7 @@ El video representa la interfaz y servicios reales de la rama main en un servido
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
-from threading import Thread
+from threading import Thread, Event
 from wsgiref.simple_server import make_server
 import shutil
 
@@ -47,11 +47,23 @@ def fixture():
 
 
 async def record():
-    connection = fixture()
-    app = create_wsgi(Application(Pool(connection)), Settings(BASE, 'ADMIN', production=False))
-    server = make_server('127.0.0.1', 8765, app)
-    t = Thread(target=server.serve_forever, daemon=True)
+    # La conexión SQLite de prueba debe crearse y usarse en el mismo hilo.
+    ready = Event()
+    holder = {}
+    def serve():
+        connection = fixture()
+        application = create_wsgi(Application(Pool(connection)), Settings(BASE, 'ADMIN', production=False))
+        server = make_server('127.0.0.1', 8765, application)
+        holder['server'] = server
+        ready.set()
+        try:
+            server.serve_forever()
+        finally:
+            connection.db.close()
+    t = Thread(target=serve, daemon=True)
     t.start()
+    if not ready.wait(timeout=20):
+        raise RuntimeError('El servidor local no inició.')
 
     try:
         async with async_playwright() as playwright:
@@ -104,9 +116,8 @@ async def record():
             await browser.close()
             shutil.copy2(clip, OUT/'demo_original.webm')
     finally:
-        server.shutdown()
+        holder['server'].shutdown()
         t.join(timeout=5)
-        connection.db.close()
 
 
 if __name__ == '__main__':
